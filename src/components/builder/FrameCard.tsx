@@ -207,7 +207,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
             <div className="space-y-1.5">
               {frame.nodes.map((node, nodeIdx) => {
                 const template = nodeTemplates.find((t) => t.base_id === node.base_id);
-                const role = template ? roles.find((r) => r.id === template.role_id) : undefined;
+                const role = roles.find((r) => r.id === (node.assigned_role_id || template?.role_id));
                 return (
                   <FrameNodeSlot
                     key={node.instance_id}

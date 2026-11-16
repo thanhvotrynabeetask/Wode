@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ProjectSchema, Role, NodeTemplate, Frame, NodeInstance, EdgeConfig } from '../types/schema';
+
 import { generateRoleId, generateNodeId, generateFrameId, generateInstanceId } from '../utils/idGenerator';
 import { formatISOTimestamp } from '../utils/dateFormat';
 import { APP_VERSION } from '../utils/constants';
@@ -47,7 +48,14 @@ interface ProjectState {
   updateNodeInstance: (frameId: string, instanceId: string, updates: Partial<Omit<NodeInstance, 'instance_id'>>) => void;
   updateNodePosition: (frameId: string, instanceId: string, customX: number, customY?: number, assignedRoleId?: string) => void;
   updateMultipleNodesPositions: (updates: { frameId: string; instanceId: string; customX: number; customY?: number; assignedRoleId?: string }[]) => void;
-  moveNodeToFrame: (fromFrameId: string, toFrameId: string, instanceId: string, newCustomX?: number) => void;
+  moveNodeToFrame: (
+    fromFrameId: string,
+    toFrameId: string,
+    instanceId: string,
+    newCustomX?: number,
+    assignedRoleId?: string,
+    insertIndex?: number
+  ) => void;
   resetNodePositions: () => void;
 
   // Edges
@@ -171,16 +179,25 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     })),
 
   removeRole: (id) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        roles: s.schema.roles.filter((r) => r.id !== id),
-        node_palette: s.schema.node_palette.filter((n) => n.role_id !== id),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const remainingRoles = s.schema.roles.filter((r) => r.id !== id);
+      const fallbackRoleId = remainingRoles[0]?.id;
+      const isSpecial = (n: NodeTemplate) => n.node_kind === 'storage' || n.node_kind === 'mediator';
+      // Storage / mediator templates are independent of any role: keep them and re-home to another lane.
+      const nodePalette = s.schema.node_palette
+        .filter((n) => n.role_id !== id || (isSpecial(n) && fallbackRoleId))
+        .map((n) => (n.role_id === id && fallbackRoleId ? { ...n, role_id: fallbackRoleId } : n));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: {
+          ...s.schema,
+          roles: remainingRoles,
+          node_palette: nodePalette,
+        },
+        isDirty: true,
+      };
+    }),
 
   addNodeTemplate: (template) =>
     set((s) => ({
@@ -401,7 +418,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       };
     }),
 
-  moveNodeToFrame: (fromFrameId, toFrameId, instanceId, newCustomX) =>
+  moveNodeToFrame: (fromFrameId, toFrameId, instanceId, newCustomX, assignedRoleId, insertIndex) =>
     set((s) => {
       let movingNode: NodeInstance | null = null;
       const updatedFrames = s.schema.frames.map((f) => {
@@ -424,6 +441,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       const finalNode: NodeInstance = {
         ...targetNode,
         custom_x: newCustomX !== undefined ? newCustomX : undefined,
+        custom_y: undefined,
+        ...(assignedRoleId ? { assigned_role_id: assignedRoleId } : {}),
       };
 
       return {
@@ -431,9 +450,14 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         future: [],
         schema: {
           ...s.schema,
-          frames: updatedFrames.map((f) =>
-            f.frame_id === toFrameId ? { ...f, nodes: [...f.nodes, finalNode] } : f
-          ),
+          frames: updatedFrames.map((f) => {
+            if (f.frame_id !== toFrameId) return f;
+            const nodes = [...f.nodes];
+            const index =
+              insertIndex === undefined ? nodes.length : Math.max(0, Math.min(insertIndex, nodes.length));
+            nodes.splice(index, 0, finalNode);
+            return { ...f, nodes };
+          }),
         },
         isDirty: true,
       };

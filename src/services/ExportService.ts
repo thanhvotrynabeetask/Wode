@@ -68,6 +68,17 @@ export class ExportService {
       .map((n) => {
         const displayTitle = n.customLabel || n.title;
         const isStorage = n.nodeKind === 'storage';
+        const isMediator = n.nodeKind === 'mediator';
+
+        if (isMediator) {
+          return `
+        <g transform="translate(${n.x}, ${n.y})">
+          <rect x="0" y="0" width="${n.width}" height="${n.height}" rx="20" fill="#F5F3FF" stroke="#7C3AED" stroke-width="2" stroke-dasharray="6 3" />
+          <circle cx="22" cy="${n.height / 2}" r="8" fill="#7C3AED" />
+          <text x="38" y="26" font-size="12" font-weight="600" fill="#5B21B6" font-family="system-ui, sans-serif">${this.escapeXml(displayTitle)}</text>
+          <text x="38" y="42" font-size="9" font-weight="600" fill="#7C3AED" font-family="system-ui, sans-serif">KÊNH TRUNG GIAN</text>
+        </g>`;
+        }
 
         if (isStorage) {
           return `

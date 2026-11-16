@@ -76,6 +76,8 @@ export const DiagramCanvas: React.FC = () => {
     sourceFrameTitle: string;
     targetFrame: LayoutFrameOverlay;
     newX: number;
+    assignedRoleId?: string;
+    insertIndex: number;
   } | null>(null);
 
   const layout = useMemo(() => {
@@ -121,19 +123,26 @@ export const DiagramCanvas: React.FC = () => {
           const updatedOffsets = new Map<string, { x: number; y: number; assignedRoleId?: string }>();
 
           multiDragState.items.forEach(({ node, nodeStartX, nodeStartY }) => {
-            const isStorage = node.nodeKind === 'storage';
+            const isSpecial = node.nodeKind === 'storage' || node.nodeKind === 'mediator';
             const newX = Math.max(160, Math.round(nodeStartX + dx));
 
             let newY = nodeStartY;
             let assignedRoleId: string | undefined = undefined;
 
-            if (isStorage) {
-              newY = Math.max(40, Math.round(nodeStartY + dy));
-              const centerNodeY = newY + node.height / 2;
-              const targetLane = layout.swimlanes.find(
-                (lane) => centerNodeY >= lane.y && centerNodeY <= lane.y + lane.height
-              );
-              if (targetLane) assignedRoleId = targetLane.roleId;
+            if (isSpecial && layout.swimlanes.length > 0) {
+              // Magnet: follow the lane under the cursor (nearest one when outside) and sit centered in it.
+              const centerNodeY = nodeStartY + dy + node.height / 2;
+              const targetLane =
+                layout.swimlanes.find(
+                  (lane) => centerNodeY >= lane.y && centerNodeY <= lane.y + lane.height
+                ) ||
+                layout.swimlanes.reduce((nearest, lane) => {
+                  const distance = (l: typeof lane) =>
+                    Math.min(Math.abs(centerNodeY - l.y), Math.abs(centerNodeY - (l.y + l.height)));
+                  return distance(lane) < distance(nearest) ? lane : nearest;
+                });
+              newY = targetLane.y + (targetLane.height - node.height) / 2;
+              assignedRoleId = targetLane.roleId;
             } else {
               const lane = layout.swimlanes.find((l) => l.roleId === node.roleId);
               if (lane) {
@@ -171,11 +180,17 @@ export const DiagramCanvas: React.FC = () => {
       );
 
       if (targetFrame && targetFrame.frameId !== multiDragState.primaryNode.frameId) {
+        const primaryCenterX = primaryFinalX + multiDragState.primaryNode.width / 2;
+        const insertIndex = layout.nodes.filter(
+          (n) => n.frameId === targetFrame.frameId && n.x + n.width / 2 < primaryCenterX
+        ).length;
         setFrameTransferConfirm({
           node: multiDragState.primaryNode,
           sourceFrameTitle: multiDragState.primaryNode.frameTitle,
           targetFrame,
           newX: primaryFinalX,
+          assignedRoleId: primaryOffset?.assignedRoleId,
+          insertIndex,
         });
       } else {
         if (multiDragState.items.length === 1) {
@@ -209,7 +224,7 @@ export const DiagramCanvas: React.FC = () => {
     }
 
     setIsPanning(false);
-  }, [multiDragState, layout.frames, updateNodePosition, updateMultipleNodesPositions]);
+  }, [multiDragState, layout.frames, layout.nodes, updateNodePosition, updateMultipleNodesPositions]);
 
   useEffect(() => {
     if (isPanning || multiDragState) {
@@ -247,7 +262,7 @@ export const DiagramCanvas: React.FC = () => {
     setPan(30, 20);
   }, [layout.canvasWidth, layout.canvasHeight, setZoom, setPan]);
 
-  // Register Global Keybindings (Undo, Redo, Ctrl+Q, Ctrl+W, etc. - Requirement 1, 4, 5)
+  // Register Global Keybindings (Undo, Redo, Ctrl+Q, Ctrl+A, etc. - Requirement 1, 4, 5)
   useGlobalKeybindings(allInstanceIds, handleFitToScreen);
 
   // Node Drag Start handler (supports multi-selection dragging)
@@ -375,8 +390,10 @@ export const DiagramCanvas: React.FC = () => {
 
   const handleConfirmFrameTransfer = () => {
     if (!frameTransferConfirm) return;
-    const { node, targetFrame, newX } = frameTransferConfirm;
-    moveNodeToFrame(node.frameId, targetFrame.frameId, node.instanceId, newX);
+    const { node, targetFrame, newX, assignedRoleId, insertIndex } = frameTransferConfirm;
+    moveNodeToFrame(node.frameId, targetFrame.frameId, node.instanceId, newX, assignedRoleId, insertIndex);
+    setSelectedFrame(targetFrame.frameId);
+    setSelectedInstance(node.instanceId);
     addToast('success', `Đã chuyển "${node.title}" sang ${targetFrame.title}`);
     setFrameTransferConfirm(null);
   };

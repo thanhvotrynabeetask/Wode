@@ -3,7 +3,8 @@ import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { NodeTemplate, Role, CornerSymbol, NodeKind } from '../../types/schema';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
-import { Database, UserCheck } from 'lucide-react';
+import { Database, UserCheck, ArrowLeftRight } from 'lucide-react';
+import { NODE_KIND_META } from '../../utils/nodeKind';
 
 interface NodeTemplateEditorModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface NodeTemplateEditorModalProps {
   roles: Role[];
   initialTemplate?: NodeTemplate | null;
   defaultRoleId?: string;
+  defaultKind?: NodeKind;
 }
 
 const CORNER_SYMBOLS: { id: CornerSymbol; label: string }[] = [
@@ -29,6 +31,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
   roles,
   initialTemplate,
   defaultRoleId,
+  defaultKind,
 }) => {
   const [title, setTitle] = useState('');
   const [roleId, setRoleId] = useState('');
@@ -45,9 +48,9 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
       setTitle('');
       setRoleId(defaultRoleId || (roles[0] ? roles[0].id : ''));
       setCornerSymbol('user-action');
-      setNodeKind('standard');
+      setNodeKind(defaultKind || 'standard');
     }
-  }, [initialTemplate, defaultRoleId, roles, isOpen]);
+  }, [initialTemplate, defaultRoleId, defaultKind, roles, isOpen]);
 
   const selectedRole = roles.find((r) => r.id === roleId);
 
@@ -60,7 +63,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
       role_id: roleId,
       corner_symbol: cornerSymbol,
       node_kind: nodeKind,
-      color: nodeKind === 'storage' ? '#0284C7' : selectedRole ? selectedRole.color : '#3B82F6',
+      color: nodeKind !== 'standard' ? NODE_KIND_META[nodeKind].color : selectedRole ? selectedRole.color : '#3B82F6',
     });
     onClose();
   };
@@ -78,7 +81,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
           <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
             Phân loại thành phần
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setNodeKind('standard')}
@@ -108,9 +111,27 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
             >
               <Database size={18} className="text-sky-600 mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs font-semibold">Storage / Trung gian</p>
+                <p className="text-xs font-semibold">Storage</p>
                 <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">
-                  Database, Queue... có thể tự do kéo đổi làn trên Canvas.
+                  Database, Cache... tự hút vào làn khi kéo thả.
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setNodeKind('mediator')}
+              className={`p-2.5 rounded-lg border text-left flex items-start gap-2.5 transition-colors ${
+                nodeKind === 'mediator'
+                  ? 'border-violet-500 bg-violet-50/70 text-violet-900 ring-1 ring-violet-500'
+                  : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <ArrowLeftRight size={18} className="text-violet-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold">Kênh trung gian</p>
+                <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+                  Queue, API gateway... tự hút vào làn khi kéo thả.
                 </p>
               </div>
             </button>
@@ -126,7 +147,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
             type="text"
             required
             autoFocus
-            placeholder={nodeKind === 'storage' ? 'Ví dụ: Redis Cache, PostgreSQL DB, Message Queue...' : 'Ví dụ: Tạo đơn hàng, Duyệt thanh toán...'}
+            placeholder={nodeKind === 'storage' ? 'Ví dụ: Redis Cache, PostgreSQL DB...' : nodeKind === 'mediator' ? 'Ví dụ: Message Queue, API Gateway, Webhook...' : 'Ví dụ: Tạo đơn hàng, Duyệt thanh toán...'}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -136,7 +157,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
         {/* Role Selection */}
         <div>
           <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-            {nodeKind === 'storage' ? 'Làn mặc định ban đầu' : 'Thuộc Vai Trò (Swimlane)'}
+            {nodeKind !== 'standard' ? 'Làn mặc định ban đầu' : 'Thuộc Vai Trò (Swimlane)'}
           </label>
           <select
             value={roleId}

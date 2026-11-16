@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
 import { RoleGroup } from './RoleGroup';
+import { SpecialNodeGroup } from './SpecialNodeGroup';
 import { RoleEditorModal } from './RoleEditorModal';
 import { NodeTemplateEditorModal } from './NodeTemplateEditorModal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Button } from '../common/Button';
 import { Plus, Search, Sparkles } from 'lucide-react';
-import { Role, NodeTemplate } from '../../types/schema';
+import { Role, NodeTemplate, NodeKind } from '../../types/schema';
+import { isSpecialKind } from '../../utils/nodeKind';
 
 export const RolePalette: React.FC = () => {
   const {
@@ -32,6 +34,7 @@ export const RolePalette: React.FC = () => {
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<NodeTemplate | null>(null);
   const [targetRoleIdForTemplate, setTargetRoleIdForTemplate] = useState<string | undefined>(undefined);
+  const [targetKindForTemplate, setTargetKindForTemplate] = useState<NodeKind | undefined>(undefined);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
     type: 'role' | 'template';
@@ -106,7 +109,9 @@ export const RolePalette: React.FC = () => {
 
   // Filter templates based on search query
   const filteredRoles = schema.roles.map((role) => {
-    const templates = schema.node_palette.filter((tpl) => tpl.role_id === role.id);
+    const templates = schema.node_palette.filter(
+      (tpl) => tpl.role_id === role.id && !isSpecialKind(tpl.node_kind)
+    );
     const filteredTemplates = search.trim()
       ? templates.filter(
           (t) =>
@@ -116,6 +121,48 @@ export const RolePalette: React.FC = () => {
       : templates;
     return { role, templates: filteredTemplates };
   });
+
+  const filterSpecial = (kind: 'storage' | 'mediator') =>
+    schema.node_palette.filter(
+      (tpl) =>
+        tpl.node_kind === kind &&
+        (!search.trim() || tpl.title.toLowerCase().includes(search.toLowerCase()))
+    );
+
+  const openSpecialTemplateModal = (kind: 'storage' | 'mediator') => {
+    setTargetRoleIdForTemplate(schema.roles[0]?.id);
+    setTargetKindForTemplate(kind);
+    setEditingTemplate(null);
+    setTemplateModalOpen(true);
+  };
+
+  const requestDeleteTemplate = (baseId: string) => {
+    const tpl = schema.node_palette.find((t) => t.base_id === baseId);
+    setDeleteConfirm({
+      type: 'template',
+      id: baseId,
+      name: `Nhiệm vụ mẫu "${tpl?.title ?? baseId}"`,
+    });
+  };
+
+  const renderSpecialGroup = (kind: 'storage' | 'mediator') => (
+    <SpecialNodeGroup
+      key={kind}
+      kind={kind}
+      templates={filterSpecial(kind)}
+      getUsageCount={getUsageCount}
+      onAddTemplate={() => openSpecialTemplateModal(kind)}
+      onEditTemplate={(tpl) => {
+        setTargetRoleIdForTemplate(tpl.role_id);
+        setTargetKindForTemplate(undefined);
+        setEditingTemplate(tpl);
+        setTemplateModalOpen(true);
+      }}
+      onDeleteTemplate={requestDeleteTemplate}
+      onAddNodeToFrame={handleAddNodeToFrame}
+      activeFrameTitle={activeFrame?.title}
+    />
+  );
 
   return (
     <div className="flex flex-col h-full bg-white select-none">
@@ -212,26 +259,28 @@ export const RolePalette: React.FC = () => {
               }
               onAddTemplate={() => {
                 setTargetRoleIdForTemplate(role.id);
+                setTargetKindForTemplate('standard');
                 setEditingTemplate(null);
                 setTemplateModalOpen(true);
               }}
               onEditTemplate={(tpl) => {
                 setTargetRoleIdForTemplate(role.id);
+                setTargetKindForTemplate(undefined);
                 setEditingTemplate(tpl);
                 setTemplateModalOpen(true);
               }}
-              onDeleteTemplate={(baseId) => {
-                const tpl = schema.node_palette.find((t) => t.base_id === baseId);
-                setDeleteConfirm({
-                  type: 'template',
-                  id: baseId,
-                  name: `Nhiệm vụ mẫu "${tpl?.title ?? baseId}"`,
-                })
-              }}
+              onDeleteTemplate={requestDeleteTemplate}
               onAddNodeToFrame={handleAddNodeToFrame}
               activeFrameTitle={activeFrame?.title}
             />
           ))
+        )}
+
+        {schema.roles.length > 0 && (
+          <>
+            {renderSpecialGroup('storage')}
+            {renderSpecialGroup('mediator')}
+          </>
         )}
       </div>
 
@@ -257,6 +306,7 @@ export const RolePalette: React.FC = () => {
         roles={schema.roles}
         initialTemplate={editingTemplate}
         defaultRoleId={targetRoleIdForTemplate}
+        defaultKind={targetKindForTemplate}
         onSave={(tpl) => {
           if (editingTemplate) {
             updateNodeTemplate(editingTemplate.base_id, tpl);

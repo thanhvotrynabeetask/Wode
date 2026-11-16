@@ -1,5 +1,6 @@
 import { ProjectSchema, Role, NodeTemplate, FlowType, CornerSymbol, NodeKind } from '../types/schema';
 import { CANVAS_DEFAULTS } from '../utils/constants';
+import { NODE_KIND_META } from '../utils/nodeKind';
 
 export interface LayoutNode {
   instanceId: string;
@@ -107,10 +108,24 @@ export class LayoutEngine {
     const roleMaxHeightMap = new Map<string, number>();
     roles.forEach((r) => roleMaxHeightMap.set(r.id, CANVAS_DEFAULTS.NODE_HEIGHT));
 
+    const fallbackRoleId = roles[0]?.id ?? 'default_role';
+    const resolveKind = (n: typeof frames[0]['nodes'][0], tpl?: NodeTemplate): NodeKind =>
+      tpl ? tpl.node_kind || 'standard' : n.node_kind || 'standard';
+    // Special nodes (storage / mediator) live in the lane they were dropped on;
+    // standard nodes always follow their template's role.
+    const resolveRoleId = (n: typeof frames[0]['nodes'][0], tpl?: NodeTemplate): string => {
+      const kind = resolveKind(n, tpl);
+      const candidate =
+        kind === 'standard'
+          ? tpl?.role_id || n.assigned_role_id
+          : n.assigned_role_id || tpl?.role_id;
+      return candidate && roleMap.has(candidate) ? candidate : fallbackRoleId;
+    };
+
     frames.forEach((frame) => {
       frame.nodes.forEach((n) => {
         const tpl = templateMap.get(n.base_id);
-        const roleId = n.assigned_role_id || tpl?.role_id || (roles[0]?.id ?? 'default_role');
+        const roleId = resolveRoleId(n, tpl);
         const h = computeNodeHeight(n);
         const curMax = roleMaxHeightMap.get(roleId) || CANVAS_DEFAULTS.NODE_HEIGHT;
         if (h > curMax) roleMaxHeightMap.set(roleId, h);
@@ -159,13 +174,10 @@ export class LayoutEngine {
 
         frame.nodes.forEach((nodeInst, nIdx) => {
           const tpl = templateMap.get(nodeInst.base_id);
-          const isStorage = nodeInst.node_kind === 'storage' || tpl?.node_kind === 'storage';
-          const nodeKind: NodeKind = isStorage ? 'storage' : 'standard';
+          const nodeKind = resolveKind(nodeInst, tpl);
+          const isSpecial = nodeKind !== 'standard';
 
-          const roleId =
-            nodeInst.assigned_role_id ||
-            tpl?.role_id ||
-            (roles[0]?.id ?? 'default_role');
+          const roleId = resolveRoleId(nodeInst, tpl);
           const role = roleMap.get(roleId);
           const laneInfo = roleYMap.get(roleId) || { y: topMargin, height: 130 };
 
@@ -175,9 +187,10 @@ export class LayoutEngine {
           const defaultX = currentX + nIdx * (nodeWidth + nodeGapX);
           const nodeX = nodeInst.custom_x !== undefined ? nodeInst.custom_x : defaultX;
 
-          // Default Y position (centered vertically inside lane)
+          // Nodes always sit centered in their lane, so a special node dropped on a lane
+          // magnets neatly instead of straddling the lane border.
           let nodeY = laneInfo.y + (laneInfo.height - nodeHeight) / 2;
-          if (isStorage && nodeInst.custom_y !== undefined) {
+          if (!isSpecial && nodeInst.custom_y !== undefined) {
             nodeY = nodeInst.custom_y;
           }
 
@@ -191,7 +204,7 @@ export class LayoutEngine {
             customLabel: nodeInst.custom_label,
             cornerSymbol: tpl?.corner_symbol || 'none',
             nodeKind,
-            color: isStorage ? '#0284C7' : role?.color || '#3B82F6',
+            color: isSpecial ? NODE_KIND_META[nodeKind as 'storage' | 'mediator'].color : role?.color || '#3B82F6',
             x: nodeX,
             y: nodeY,
             width: nodeWidth,
