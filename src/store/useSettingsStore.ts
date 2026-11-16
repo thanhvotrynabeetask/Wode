@@ -1,0 +1,80 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { STORAGE_KEYS } from '../utils/constants';
+
+export interface KeybindingMap {
+  undo: string;
+  redo: string;
+  modeSelect: string;
+  modePan: string;
+  zoomIn: string;
+  zoomOut: string;
+  fitScreen: string;
+  selectAll: string;
+  save: string;
+}
+
+export const DEFAULT_KEYBINDINGS: KeybindingMap = {
+  undo: 'Ctrl+Z',
+  redo: 'Ctrl+Y',
+  modeSelect: 'Ctrl+Q',
+  modePan: 'Ctrl+W',
+  zoomIn: 'Ctrl+=',
+  zoomOut: 'Ctrl+-',
+  fitScreen: 'Ctrl+0',
+  selectAll: 'Ctrl+A',
+  save: 'Ctrl+S',
+};
+
+interface SettingsState {
+  workspacePath: string | null;
+  workspaceHandle: FileSystemDirectoryHandle | null;
+  theme: 'light' | 'dark' | 'system';
+  enableDarkGlow: boolean;
+  keybindings: KeybindingMap;
+  lastOpenedFile: string | null;
+
+  setWorkspacePath: (path: string) => void;
+  setWorkspaceHandle: (handle: FileSystemDirectoryHandle | null) => void;
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setEnableDarkGlow: (enabled: boolean) => void;
+  setKeybinding: (action: keyof KeybindingMap, shortcut: string) => void;
+  resetKeybindings: () => void;
+  setLastOpenedFile: (file: string | null) => void;
+  clearWorkspace: () => void;
+}
+
+export const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set) => ({
+      workspacePath: null,
+      workspaceHandle: null,
+      theme: 'system',
+      enableDarkGlow: true,
+      keybindings: { ...DEFAULT_KEYBINDINGS },
+      lastOpenedFile: null,
+
+      setWorkspacePath: (path) => set({ workspacePath: path }),
+      setWorkspaceHandle: (handle) => set({ workspaceHandle: handle }),
+      setTheme: (theme) => set({ theme }),
+      setEnableDarkGlow: (enableDarkGlow) => set({ enableDarkGlow }),
+      setKeybinding: (action, shortcut) =>
+        set((s) => ({
+          keybindings: { ...s.keybindings, [action]: shortcut },
+        })),
+      resetKeybindings: () => set({ keybindings: { ...DEFAULT_KEYBINDINGS } }),
+      setLastOpenedFile: (file) => set({ lastOpenedFile: file }),
+      clearWorkspace: () => set({ workspacePath: null, workspaceHandle: null, lastOpenedFile: null }),
+    }),
+    {
+      name: STORAGE_KEYS.WORKSPACE_PATH,
+      partialize: (state) => ({
+        workspacePath: state.workspacePath,
+        theme: state.theme,
+        enableDarkGlow: state.enableDarkGlow,
+        keybindings: state.keybindings,
+        lastOpenedFile: state.lastOpenedFile,
+      }),
+    }
+  )
+);
