@@ -40,6 +40,11 @@ export interface EdgeConfig {
   curvature_offset?: number; // Independent curvature variation to avoid collision
 }
 
+export interface EdgeRoute {
+  /** Interior bend points of a hand-drawn orthogonal route (absolute canvas coordinates). */
+  waypoints: { x: number; y: number }[];
+}
+
 export interface Frame {
   frame_id: string;
   title: string;
@@ -66,4 +71,6 @@ export interface ProjectSchema {
   roles: Role[];
   node_palette: NodeTemplate[];
   frames: Frame[];
+  /** Manual route overrides keyed by `${fromInstanceId}>${toInstanceId}`. Absent = automatic routing. */
+  edge_routes?: Record<string, EdgeRoute>;
 }

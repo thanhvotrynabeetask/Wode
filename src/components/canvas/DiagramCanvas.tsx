@@ -8,6 +8,8 @@ import { FrameOverlayRenderer } from './FrameOverlayRenderer';
 import { EdgeRenderer } from './EdgeRenderer';
 import { NodeRenderer } from './NodeRenderer';
 import { EdgeEditorModal } from './EdgeEditorModal';
+import { EdgeRouteHandles, STRAIGHT_EDGE_HANDLE } from './EdgeRouteHandles';
+import { Point, buildManualPoints, extractWaypoints, pointsToPath } from '../../services/EdgeRouter';
 import { CanvasSubToolbar } from './CanvasSubToolbar';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useGlobalKeybindings } from '../../hooks/useGlobalKeybindings';
@@ -36,6 +38,8 @@ export const DiagramCanvas: React.FC = () => {
     moveNodeToFrame,
     updateNodeInstance,
     updateEdge,
+    setEdgeRoute,
+    clearAllEdgeRoutes,
   } = useProjectStore();
 
   const {
@@ -70,6 +74,18 @@ export const DiagramCanvas: React.FC = () => {
   const rafRef = useRef<number | null>(null);
 
   const [editingEdge, setEditingEdge] = useState<LayoutEdge | null>(null);
+
+  const [routeEditKey, setRouteEditKey] = useState<string | null>(null);
+  const [routeDrag, setRouteDrag] = useState<{
+    edge: LayoutEdge;
+    segmentIndex: number;
+    basePoints: Point[];
+    startClientX: number;
+    startClientY: number;
+    rawPoints: Point[];
+    previewPoints: Point[];
+    moved: boolean;
+  } | null>(null);
 
   const [frameTransferConfirm, setFrameTransferConfirm] = useState<{
     node: LayoutNode;
@@ -113,6 +129,29 @@ export const DiagramCanvas: React.FC = () => {
   // High performance Drag tracking with requestAnimationFrame
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
+      if (routeDrag) {
+        const snapToGrid = (v: number) => Math.round(v / 10) * 10;
+        const { basePoints, segmentIndex } = routeDrag;
+        const raw = basePoints.map((p) => ({ ...p }));
+        const a = raw[segmentIndex];
+        const b = raw[segmentIndex + 1];
+        if (Math.abs(a.y - b.y) < 0.01) {
+          const y = snapToGrid(a.y + (e.clientY - routeDrag.startClientY) / zoom);
+          a.y = y;
+          b.y = y;
+        } else {
+          const x = snapToGrid(a.x + (e.clientX - routeDrag.startClientX) / zoom);
+          a.x = x;
+          b.x = x;
+        }
+        const waypoints = extractWaypoints(raw);
+        const normalized =
+          waypoints.length > 0 ? buildManualPoints(raw[0], raw[raw.length - 1], waypoints) : null;
+        setRouteDrag((prev) =>
+          prev ? { ...prev, rawPoints: raw, previewPoints: normalized || raw, moved: true } : null
+        );
+        return;
+      }
       if (multiDragState) {
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
@@ -163,11 +202,20 @@ export const DiagramCanvas: React.FC = () => {
         setPan(panStartRef.current.startPanX + dx, panStartRef.current.startPanY + dy);
       }
     },
-    [isPanning, multiDragState, zoom, setPan, layout.swimlanes]
+    [isPanning, multiDragState, routeDrag, zoom, setPan, layout.swimlanes]
   );
 
   const handleMouseUp = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
+    if (routeDrag) {
+      if (routeDrag.moved) {
+        const waypoints = extractWaypoints(routeDrag.rawPoints);
+        setEdgeRoute(routeDrag.edge.routeKey, waypoints.length > 0 ? waypoints : null);
+      }
+      setRouteDrag(null);
+      return;
+    }
 
     if (multiDragState) {
       const primaryOffset = multiDragState.currentOffsets.get(multiDragState.primaryNode.instanceId);
@@ -224,10 +272,18 @@ export const DiagramCanvas: React.FC = () => {
     }
 
     setIsPanning(false);
-  }, [multiDragState, layout.frames, layout.nodes, updateNodePosition, updateMultipleNodesPositions]);
+  }, [
+    multiDragState,
+    routeDrag,
+    layout.frames,
+    layout.nodes,
+    updateNodePosition,
+    updateMultipleNodesPositions,
+    setEdgeRoute,
+  ]);
 
   useEffect(() => {
-    if (isPanning || multiDragState) {
+    if (isPanning || multiDragState || routeDrag) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       return () => {
@@ -235,7 +291,54 @@ export const DiagramCanvas: React.FC = () => {
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isPanning, multiDragState, handleMouseMove, handleMouseUp]);
+  }, [isPanning, multiDragState, routeDrag, handleMouseMove, handleMouseUp]);
+
+  useEffect(() => {
+    if (!routeEditKey) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setRouteEditKey(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [routeEditKey]);
+
+  const handleRouteHandleDown = (e: React.MouseEvent, edge: LayoutEdge, segmentIndex: number) => {
+    e.stopPropagation();
+    e.preventDefault();
+    let basePoints = edge.points.map((p) => ({ ...p }));
+    let index = segmentIndex;
+
+    if (segmentIndex === STRAIGHT_EDGE_HANDLE) {
+      // A straight edge has no bends yet: give it a Z shape whose middle run can be dragged.
+      const [start, end] = basePoints;
+      const snapToGrid = (v: number) => Math.round(v / 10) * 10;
+      const x1 = snapToGrid(start.x + (end.x - start.x) * 0.3);
+      const x2 = snapToGrid(start.x + (end.x - start.x) * 0.7);
+      basePoints = [
+        start,
+        { x: x1, y: start.y },
+        { x: x1, y: start.y },
+        { x: x2, y: start.y },
+        { x: x2, y: start.y },
+        end,
+      ];
+      index = 2;
+    }
+
+    setRouteDrag({
+      edge,
+      segmentIndex: index,
+      basePoints,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      rawPoints: basePoints,
+      previewPoints: basePoints,
+      moved: false,
+    });
+  };
+
+  const routeEditEdge = routeEditKey ? layout.edges.find((ed) => ed.routeKey === routeEditKey) : null;
+  const manualRouteCount = Object.keys(schema.edge_routes || {}).length;
 
   // Handle Zoom via mouse wheel
   const handleWheel = (e: React.WheelEvent) => {
@@ -491,16 +594,24 @@ export const DiagramCanvas: React.FC = () => {
 
           {/* Layer 3: Edges (Interactive & Smart Anti-overlapping) */}
           <g>
-            {layout.edges.map((edge) => (
-              <EdgeRenderer
-                key={edge.id}
-                edge={edge}
-                isHighlighted={isEdgeHighlighted(edge.fromInstanceId, edge.toInstanceId)}
-                isDark={isDark}
-                enableDarkGlow={enableDarkGlow}
-                onClick={() => setEditingEdge(edge)}
-              />
-            ))}
+            {layout.edges.map((edge) => {
+              const isDragged = routeDrag?.edge.routeKey === edge.routeKey;
+              const displayEdge = isDragged
+                ? { ...edge, points: routeDrag.previewPoints, pathD: pointsToPath(routeDrag.previewPoints) }
+                : edge;
+              return (
+                <EdgeRenderer
+                  key={edge.id}
+                  edge={displayEdge}
+                  isHighlighted={
+                    edge.routeKey === routeEditKey || isEdgeHighlighted(edge.fromInstanceId, edge.toInstanceId)
+                  }
+                  isDark={isDark}
+                  enableDarkGlow={enableDarkGlow}
+                  onClick={() => setEditingEdge(edge)}
+                />
+              );
+            })}
           </g>
 
           {/* Layer 4: Nodes (Multi-selectable & Smoothly Draggable) */}
@@ -529,7 +640,66 @@ export const DiagramCanvas: React.FC = () => {
               );
             })}
           </g>
+
+          {/* Layer 5: Manual route handles for the edge being edited */}
+          {routeEditEdge && (
+            <EdgeRouteHandles
+              points={routeDrag?.edge.routeKey === routeEditEdge.routeKey ? routeDrag.previewPoints : routeEditEdge.points}
+              onHandleMouseDown={(e, segmentIndex) => handleRouteHandleDown(e, routeEditEdge, segmentIndex)}
+            />
+          )}
         </svg>
+
+        {/* Manual route editing bar */}
+        {(routeEditEdge || manualRouteCount > 0) && (
+          <div
+            className="absolute bottom-3 right-4 flex items-center gap-2"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {routeEditEdge ? (
+              <div
+                className={`border rounded-lg px-3 py-1.5 shadow-md text-[11px] flex items-center gap-3 ${
+                  isDark ? 'bg-slate-900/95 border-amber-500/40 text-slate-200' : 'bg-white/95 border-amber-400 text-gray-700'
+                }`}
+              >
+                <span>Kéo các ô vàng để dời đoạn đường (bám lưới 10px)</span>
+                <button
+                  type="button"
+                  className="font-semibold text-amber-500 hover:text-amber-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={!routeEditEdge.isManualRoute}
+                  onClick={() => {
+                    setEdgeRoute(routeEditEdge.routeKey, null);
+                    addToast('info', 'Đã trả luồng về tự động định tuyến.');
+                  }}
+                >
+                  Tự động lại
+                </button>
+                <button
+                  type="button"
+                  className="font-semibold text-blue-500 hover:text-blue-400"
+                  onClick={() => setRouteEditKey(null)}
+                >
+                  Xong
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={`border rounded-lg px-2.5 py-1 shadow-xs text-[11px] ${
+                  isDark
+                    ? 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-slate-200'
+                    : 'bg-white/90 border-gray-200 text-gray-500 hover:text-gray-800'
+                }`}
+                onClick={() => {
+                  clearAllEdgeRoutes();
+                  addToast('info', `Đã đặt lại ${manualRouteCount} đường thủ công về tự động.`);
+                }}
+              >
+                Đặt lại {manualRouteCount} đường thủ công
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Quick status pill at bottom left */}
         <div className="absolute bottom-3 left-4 pointer-events-none select-none">
@@ -559,6 +729,15 @@ export const DiagramCanvas: React.FC = () => {
         fromNodeTitle={fromNode?.title || 'Node nguồn'}
         toNodeTitle={toNode?.title || 'Node đích'}
         onSave={handleSaveEdge}
+        onEditRoute={() => {
+          if (editingEdge) setRouteEditKey(editingEdge.routeKey);
+        }}
+        onResetRoute={() => {
+          if (editingEdge) {
+            setEdgeRoute(editingEdge.routeKey, null);
+            addToast('info', 'Đã trả luồng về tự động định tuyến.');
+          }
+        }}
       />
 
       {/* Frame Transfer Confirmation Dialog */}

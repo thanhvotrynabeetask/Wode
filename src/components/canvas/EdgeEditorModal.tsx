@@ -3,7 +3,7 @@ import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { LayoutEdge } from '../../services/LayoutEngine';
 import { FlowType } from '../../types/schema';
-import { Palette, Trash2 } from 'lucide-react';
+import { Palette, Route, Trash2 } from 'lucide-react';
 
 interface EdgeEditorModalProps {
   isOpen: boolean;
@@ -13,6 +13,8 @@ interface EdgeEditorModalProps {
   toNodeTitle?: string;
   onSave: (updates: { message_label: string; flow_type: FlowType; color?: string }) => void;
   onDelete?: () => void;
+  onEditRoute?: () => void;
+  onResetRoute?: () => void;
 }
 
 const PRESET_EDGE_COLORS = [
@@ -34,6 +36,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
   toNodeTitle = 'Node đích',
   onSave,
   onDelete,
+  onEditRoute,
+  onResetRoute,
 }) => {
   const [label, setLabel] = useState('');
   const [flowType, setFlowType] = useState<FlowType>('solid');
@@ -164,6 +168,45 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
             <span className="text-xs font-mono text-gray-500 uppercase">{color}</span>
           </div>
         </div>
+
+        {/* Manual routing (fallback when auto routing is not good enough) */}
+        {onEditRoute && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Route size={13} className="text-gray-500" />
+              Đường đi (Route)
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onEditRoute();
+                  onClose();
+                }}
+                className="flex-1 text-xs font-medium border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg px-3 py-2 transition-colors"
+              >
+                Chỉnh đường đi thủ công
+              </button>
+              {edge.isManualRoute && onResetRoute && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onResetRoute();
+                    onClose();
+                  }}
+                  className="text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
+                >
+                  Tự động lại
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1.5">
+              {edge.isManualRoute
+                ? 'Luồng này đang dùng đường đi thủ công.'
+                : 'Đang tự động định tuyến. Dùng khi hệ thống chưa tìm được đường đi hợp lý.'}
+            </p>
+          </div>
+        )}
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-3 border-t border-gray-100">

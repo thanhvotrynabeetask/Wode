@@ -63,6 +63,8 @@ interface ProjectState {
   updateEdge: (frameId: string, fromInstance: string, toInstance: string, updates: Partial<EdgeConfig>) => void;
   updateEdgeByIndex: (frameId: string, edgeIndex: number, updates: Partial<EdgeConfig>) => void;
   setNextFrameTarget: (frameId: string, targetFrameId: string | null) => void;
+  setEdgeRoute: (routeKey: string, waypoints: { x: number; y: number }[] | null) => void;
+  clearAllEdgeRoutes: () => void;
 
   // Computed
   getUsageCount: (baseId: string) => number;
@@ -515,12 +517,22 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
               ),
             };
           } else {
-            return {
-              ...f,
-              edges_config: [
-                ...f.edges_config,
-                {
-                  from_instance: fromInstance,
+  // Editing an auto-inferred edge turns the frame explicit: keep the other inferred edges alive.
+  const baseEdges: EdgeConfig[] =
+  f.edges_config.length > 0
+  ? f.edges_config
+  : f.nodes.slice(0, -1).map((n, i) => ({
+  from_instance: n.instance_id,
+  to_instance: f.nodes[i + 1].instance_id,
+  message_label: '',
+  flow_type: 'solid' as const,
+  }));
+  return {
+  ...f,
+  edges_config: [
+  ...baseEdges,
+  {
+  from_instance: fromInstance,
                   to_instance: toInstance,
                   message_label: updates.message_label || '',
                   flow_type: updates.flow_type || 'solid',
@@ -532,6 +544,30 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           }
         }),
       },
+      isDirty: true,
+    })),
+
+  setEdgeRoute: (routeKey, waypoints) =>
+    set((s) => {
+      const routes = { ...(s.schema.edge_routes || {}) };
+      if (waypoints && waypoints.length > 0) routes[routeKey] = { waypoints };
+      else delete routes[routeKey];
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: {
+          ...s.schema,
+          edge_routes: Object.keys(routes).length > 0 ? routes : undefined,
+        },
+        isDirty: true,
+      };
+    }),
+
+  clearAllEdgeRoutes: () =>
+    set((s) => ({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: { ...s.schema, edge_routes: undefined },
       isDirty: true,
     })),
 

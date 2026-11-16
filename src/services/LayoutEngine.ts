@@ -1,6 +1,9 @@
 import { ProjectSchema, Role, NodeTemplate, FlowType, CornerSymbol, NodeKind } from '../types/schema';
 import { CANVAS_DEFAULTS } from '../utils/constants';
 import { NODE_KIND_META } from '../utils/nodeKind';
+import { Point, pointsToPath, routeEdges, RouteRequest } from './EdgeRouter';
+
+export type { Point } from './EdgeRouter';
 
 export interface LayoutNode {
   instanceId: string;
@@ -26,7 +29,12 @@ export interface LayoutEdge {
   fromInstanceId: string;
   toInstanceId: string;
   frameId?: string;
+  /** Key used to persist a manual route for this edge: `${from}>${to}`. */
+  routeKey: string;
   pathD: string;
+  /** Orthogonal polyline the path is drawn from (first/last point are the node ports). */
+  points: Point[];
+  isManualRoute: boolean;
   labelX: number;
   labelY: number;
   label?: string;
@@ -307,44 +315,60 @@ export class LayoutEngine {
       }
     });
 
-    // 4. SMART BRANCHING ROUTING (Guaranteed Horizontal Approach & Anti-overlap)
-    const outgoingMap = new Map<string, RawEdgeSpec[]>();
-    const incomingMap = new Map<string, RawEdgeSpec[]>();
-
-    rawEdges.forEach((e) => {
-      if (!outgoingMap.has(e.fromInstanceId)) outgoingMap.set(e.fromInstanceId, []);
-      outgoingMap.get(e.fromInstanceId)!.push(e);
-
-      if (!incomingMap.has(e.toInstanceId)) incomingMap.set(e.toInstanceId, []);
-      incomingMap.get(e.toInstanceId)!.push(e);
+    // 4. ORTHOGONAL ROUTING (obstacle-aware, spread ports, separate tracks, manual overrides)
+    const seenRouteKeys = new Set<string>();
+    const uniqueEdges = rawEdges.filter((e) => {
+      const key = `${e.fromInstanceId}>${e.toInstanceId}`;
+      if (e.fromInstanceId === e.toInstanceId || seenRouteKeys.has(key)) return false;
+      if (!nodePositionMap.has(e.fromInstanceId) || !nodePositionMap.has(e.toInstanceId)) return false;
+      seenRouteKeys.add(key);
+      return true;
     });
 
+    const requests: RouteRequest[] = uniqueEdges.map((e) => {
+      const key = `${e.fromInstanceId}>${e.toInstanceId}`;
+      return {
+        key,
+        fromId: e.fromInstanceId,
+        toId: e.toInstanceId,
+        labelWidth: e.label ? e.label.length * 7 + 16 : 0,
+        waypoints: schema.edge_routes?.[key]?.waypoints,
+      };
+    });
+
+    const routed = routeEdges(
+      layoutNodes.map((n) => ({
+        id: n.instanceId,
+        x: n.x,
+        y: n.y,
+        width: n.width,
+        height: n.height,
+      })),
+      requests,
+      { minX: laneHeaderWidth + 10, width: totalWidth, height: totalHeight }
+    );
+
     const layoutEdges: LayoutEdge[] = [];
-
-    rawEdges.forEach((edgeSpec) => {
-      const fromNode = nodePositionMap.get(edgeSpec.fromInstanceId);
-      const toNode = nodePositionMap.get(edgeSpec.toInstanceId);
-      if (!fromNode || !toNode) return;
-
-      const outGroup = outgoingMap.get(edgeSpec.fromInstanceId) || [edgeSpec];
-      const inGroup = incomingMap.get(edgeSpec.toInstanceId) || [edgeSpec];
-
-      const outIndex = outGroup.indexOf(edgeSpec);
-      const outTotal = outGroup.length;
-
-      const inIndex = inGroup.indexOf(edgeSpec);
-      const inTotal = inGroup.length;
-
-      const calculatedEdge = this.routeSmartEdge(
-        fromNode,
-        toNode,
-        edgeSpec,
-        outIndex,
-        outTotal,
-        inIndex,
-        inTotal
-      );
-      layoutEdges.push(calculatedEdge);
+    uniqueEdges.forEach((edgeSpec) => {
+      const routeKey = `${edgeSpec.fromInstanceId}>${edgeSpec.toInstanceId}`;
+      const route = routed.get(routeKey);
+      if (!route) return;
+      layoutEdges.push({
+        id: edgeSpec.id,
+        fromInstanceId: edgeSpec.fromInstanceId,
+        toInstanceId: edgeSpec.toInstanceId,
+        frameId: edgeSpec.frameId,
+        routeKey,
+        pathD: pointsToPath(route.points),
+        points: route.points,
+        isManualRoute: route.isManual,
+        labelX: route.labelX,
+        labelY: route.labelY,
+        label: edgeSpec.label,
+        flowType: edgeSpec.flowType,
+        color: edgeSpec.color,
+        isMacro: edgeSpec.isMacro,
+      });
     });
 
     return {
@@ -354,89 +378,6 @@ export class LayoutEngine {
       frames: frameOverlays,
       canvasWidth: totalWidth,
       canvasHeight: totalHeight,
-    };
-  }
-
-  /**
-   * Routes an edge with guaranteed horizontal approach to node ports.
-   * By keeping cp2y == y2 strictly, the arrival tangent is strictly (1, 0),
-   * which prevents arrowheads from tilting or breaking regardless of height differences.
-   */
-  private static routeSmartEdge(
-    from: LayoutNode,
-    to: LayoutNode,
-    edgeSpec: RawEdgeSpec,
-    outIndex: number,
-    outTotal: number,
-    inIndex: number,
-    inTotal: number
-  ): LayoutEdge {
-    // 1. Stagger Start Port along the right edge of fromNode
-    const x1 = from.x + from.width;
-    const y1 = from.y + (from.height * (outIndex + 1)) / (outTotal + 1);
-
-    // 2. Stagger End Port along the left edge of toNode
-    const x2 = to.x;
-    const y2 = to.y + (to.height * (inIndex + 1)) / (inTotal + 1);
-
-    const dx = x2 - x1;
-
-    // Arching for branching separation
-    let branchArc = 0;
-    if (outTotal > 1) {
-      branchArc += (outIndex - (outTotal - 1) / 2) * 20;
-    }
-    if (inTotal > 1) {
-      branchArc += (inIndex - (inTotal - 1) / 2) * 14;
-    }
-    if (edgeSpec.curvatureOffset !== undefined) {
-      branchArc += edgeSpec.curvatureOffset;
-    }
-
-    let pathD = '';
-    let labelX = (x1 + x2) / 2;
-    let labelY = (y1 + y2) / 2 - 12 + branchArc;
-
-    if (dx >= 20) {
-      // Forward connection
-      // Tension: how far the control points extend horizontally
-      const tension = Math.max(35, Math.min(180, dx * 0.45));
-
-      // CRITICAL FIX FOR IMAGE 2:
-      // cp1y departs horizontally from y1
-      // cp2y ARRIVES EXACTLY AT y2 (cp2y = y2)
-      // This guarantees the tangent at (x2, y2) is strictly horizontal (dx/dt > 0, dy/dt = 0),
-      // so the arrowhead is ALWAYS level and points straight into the node port!
-      const cp1x = x1 + tension;
-      const cp1y = y1 + branchArc * 0.4;
-      const cp2x = x2 - tension;
-      const cp2y = y2; // Strictly y2!
-
-      pathD = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
-    } else {
-      // Loop backward connection: route around cleanly
-      const loopExtension = Math.max(45, Math.abs(dx) + 40);
-      const cp1x = x1 + loopExtension;
-      const cp1y = y1 - 25 + branchArc;
-      const cp2x = x2 - loopExtension;
-      const cp2y = y2; // Strictly y2 for perfect horizontal arrival!
-
-      pathD = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
-      labelY = Math.min(y1, y2) - 20 + branchArc;
-    }
-
-    return {
-      id: edgeSpec.id,
-      fromInstanceId: from.instanceId,
-      toInstanceId: to.instanceId,
-      frameId: edgeSpec.frameId,
-      pathD,
-      labelX,
-      labelY,
-      label: edgeSpec.label,
-      flowType: edgeSpec.flowType,
-      color: edgeSpec.color,
-      isMacro: edgeSpec.isMacro,
     };
   }
 }
