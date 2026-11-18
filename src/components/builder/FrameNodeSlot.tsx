@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NodeInstance, NodeTemplate, Role } from '../../types/schema';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
+import { NODE_KIND_META, isSpecialKind } from '../../utils/nodeKind';
 import { ChevronUp, ChevronDown, Trash2, Edit3, Check, X } from 'lucide-react';
 
 interface FrameNodeSlotProps {
@@ -33,7 +34,9 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelText, setLabelText] = useState(node.custom_label || '');
 
-  const roleColor = role?.color || '#3B82F6';
+  const kind = node.node_kind || template?.node_kind;
+  const kindMeta = isSpecialKind(kind) ? NODE_KIND_META[kind] : null;
+  const roleColor = role?.color || kindMeta?.color || '#3B82F6';
   const displayTitle = node.custom_label || node.title;
 
   const handleSaveLabel = () => {
@@ -98,6 +101,12 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
               <p className="text-xs font-medium text-gray-800 truncate" title={displayTitle}>
                 {displayTitle}
               </p>
+              {kindMeta && (
+                <p className="text-[10px] truncate" style={{ color: kindMeta.color }}>
+                  {kindMeta.tag}
+                  {role ? ` • Làn: ${role.name}` : ''}
+                </p>
+              )}
               {node.custom_label && (
                 <p className="text-[10px] text-gray-400 truncate italic">
                   Gốc: {node.title}

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { LayoutNode } from '../../services/LayoutEngine';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
-import { Database, Check, X } from 'lucide-react';
+import { Database, ArrowLeftRight, Check, X } from 'lucide-react';
+import { NODE_KIND_META } from '../../utils/nodeKind';
 
 interface NodeRendererProps {
   node: LayoutNode;
@@ -32,6 +33,10 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
   const [editText, setEditText] = useState(node.customLabel || '');
 
   const isStorage = node.nodeKind === 'storage';
+  const isMediator = node.nodeKind === 'mediator';
+  const isSpecial = isStorage || isMediator;
+  const kindColor = isSpecial ? NODE_KIND_META[node.nodeKind as 'storage' | 'mediator'].color : node.color;
+  const kindTag = isSpecial ? NODE_KIND_META[node.nodeKind as 'storage' | 'mediator'].tag : '';
 
   const handleSaveEdit = () => {
     if (onUpdateLabel) {
@@ -40,37 +45,43 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
     setIsEditing(false);
   };
 
-  // Dark mode styling and luminous glow (Requirement 3)
-  const nodeBg = isDark
-    ? isStorage
-      ? '#082F49'
-      : '#1E293B'
-    : isStorage
-    ? '#F0F9FF'
-    : '#FFFFFF';
+  const specialBg = isStorage
+    ? isDark ? '#082F49' : '#F0F9FF'
+    : isDark ? '#2E1065' : '#F5F3FF';
+  const specialHeaderBg = isStorage
+    ? isDark ? '#0C4A6E' : '#E0F2FE'
+    : isDark ? '#4C1D95' : '#EDE9FE';
 
-  const nodeBorder = isDark
-    ? isSelected
-      ? '#3B82F6'
-      : isStorage
-      ? '#0284C7'
-      : '#334155'
-    : isSelected
+  const nodeBg = isSpecial ? specialBg : isDark ? '#1E293B' : '#FFFFFF';
+
+  const nodeBorder = isSelected
     ? '#3B82F6'
-    : isStorage
-    ? '#0284C7'
+    : isSpecial
+    ? kindColor
+    : isDark
+    ? '#334155'
     : '#CBD5E1';
 
   let glowFilter: string | undefined = undefined;
   if (isDark && enableDarkGlow) {
-    if (isStorage) {
-      glowFilter = 'drop-shadow(0 0 8px rgba(14, 165, 233, 0.45))';
-    } else {
-      glowFilter = `drop-shadow(0 0 6px ${node.color}55)`;
-    }
+    glowFilter = isSpecial
+      ? `drop-shadow(0 0 8px ${kindColor}73)`
+      : `drop-shadow(0 0 6px ${node.color}55)`;
   } else if (!isDark) {
     glowFilter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.06))';
   }
+
+  const titleClass = isDark
+    ? isStorage
+      ? 'text-sky-300'
+      : isMediator
+      ? 'text-violet-300'
+      : 'text-slate-100'
+    : isStorage
+    ? 'text-sky-900'
+    : isMediator
+    ? 'text-violet-900'
+    : 'text-slate-900';
 
   return (
     <g
@@ -100,7 +111,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
           y={-4}
           width={node.width + 8}
           height={node.height + 8}
-          rx={isStorage ? 14 : 12}
+          rx={isMediator ? 24 : isStorage ? 14 : 12}
           fill="none"
           stroke={isSelected ? '#3B82F6' : '#F59E0B'}
           strokeWidth={isSelected ? 2.5 : 2}
@@ -124,7 +135,22 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
           />
           <path
             d={`M 0 10 Q ${node.width / 2} 18 ${node.width} 10 L ${node.width} 0 Q ${node.width / 2} -4 0 0 Z`}
-            fill={isDark ? '#0C4A6E' : '#E0F2FE'}
+            fill={specialHeaderBg}
+          />
+        </g>
+      ) : isMediator ? (
+        <g>
+          <rect
+            x={0}
+            y={0}
+            width={node.width}
+            height={node.height}
+            rx={20}
+            fill={nodeBg}
+            stroke={nodeBorder}
+            strokeWidth={2}
+            strokeDasharray="6 3"
+            filter={glowFilter}
           />
         </g>
       ) : (
@@ -158,29 +184,24 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
           {/* Top Line: Heading */}
           <div className="flex items-center justify-between gap-1 w-full shrink-0">
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              {isStorage ? (
-                <div className="w-4 h-4 rounded-full bg-sky-600 text-white flex items-center justify-center shrink-0">
-                  <Database size={10} />
+              {isSpecial ? (
+                <div
+                  className="w-4 h-4 rounded-full text-white flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: kindColor }}
+                >
+                  {isStorage ? <Database size={10} /> : <ArrowLeftRight size={10} />}
                 </div>
               ) : null}
 
               <span
-                className={`font-bold text-xs truncate leading-tight ${
-                  isDark
-                    ? isStorage
-                      ? 'text-sky-300'
-                      : 'text-slate-100'
-                    : isStorage
-                    ? 'text-sky-900'
-                    : 'text-slate-900'
-                }`}
+                className={`font-bold text-xs truncate leading-tight ${titleClass}`}
                 title={node.title}
               >
                 {node.title}
               </span>
             </div>
 
-            {!isStorage && node.cornerSymbol !== 'none' && (
+            {!isSpecial && node.cornerSymbol !== 'none' && (
               <span
                 className="w-4 h-4 rounded flex items-center justify-center shrink-0 text-[10px]"
                 style={{ backgroundColor: `${node.color}25`, color: node.color }}
@@ -229,13 +250,12 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                   <X size={12} />
                 </button>
               </div>
-            ) : isStorage ? (
+            ) : isSpecial ? (
               <span
-                className={`text-[10px] font-semibold tracking-wide uppercase ${
-                  isDark ? 'text-sky-400' : 'text-sky-600'
-                }`}
+                className="text-[10px] font-semibold tracking-wide uppercase truncate"
+                style={{ color: kindColor }}
               >
-                {node.customLabel || 'Storage Object'}
+                {node.customLabel || kindTag}
               </span>
             ) : node.customLabel ? (
               <p

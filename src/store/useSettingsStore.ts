@@ -18,11 +18,11 @@ export const DEFAULT_KEYBINDINGS: KeybindingMap = {
   undo: 'Ctrl+Z',
   redo: 'Ctrl+Y',
   modeSelect: 'Ctrl+Q',
-  modePan: 'Ctrl+W',
+  modePan: 'Ctrl+A',
   zoomIn: 'Ctrl+=',
   zoomOut: 'Ctrl+-',
   fitScreen: 'Ctrl+0',
-  selectAll: 'Ctrl+A',
+  selectAll: 'Ctrl+Shift+A',
   save: 'Ctrl+S',
 };
 
@@ -68,6 +68,14 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: STORAGE_KEYS.WORKSPACE_PATH,
+      version: 2,
+      migrate: (persisted: unknown) => {
+        const state = (persisted || {}) as { keybindings?: Partial<KeybindingMap> };
+        const stored = { ...DEFAULT_KEYBINDINGS, ...(state.keybindings || {}) };
+        if (stored.modePan === 'Ctrl+W') stored.modePan = DEFAULT_KEYBINDINGS.modePan;
+        if (stored.selectAll === 'Ctrl+A') stored.selectAll = DEFAULT_KEYBINDINGS.selectAll;
+        return { ...state, keybindings: stored } as never;
+      },
       partialize: (state) => ({
         workspacePath: state.workspacePath,
         theme: state.theme,

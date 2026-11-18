@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ProjectSchema, Role, NodeTemplate, Frame, NodeInstance, EdgeConfig } from '../types/schema';
+
 import { generateRoleId, generateNodeId, generateFrameId, generateInstanceId } from '../utils/idGenerator';
 import { formatISOTimestamp } from '../utils/dateFormat';
 import { APP_VERSION } from '../utils/constants';
@@ -47,7 +48,14 @@ interface ProjectState {
   updateNodeInstance: (frameId: string, instanceId: string, updates: Partial<Omit<NodeInstance, 'instance_id'>>) => void;
   updateNodePosition: (frameId: string, instanceId: string, customX: number, customY?: number, assignedRoleId?: string) => void;
   updateMultipleNodesPositions: (updates: { frameId: string; instanceId: string; customX: number; customY?: number; assignedRoleId?: string }[]) => void;
-  moveNodeToFrame: (fromFrameId: string, toFrameId: string, instanceId: string, newCustomX?: number) => void;
+  moveNodeToFrame: (
+    fromFrameId: string,
+    toFrameId: string,
+    instanceId: string,
+    newCustomX?: number,
+    assignedRoleId?: string,
+    insertIndex?: number
+  ) => void;
   resetNodePositions: () => void;
 
   // Edges
@@ -55,6 +63,8 @@ interface ProjectState {
   updateEdge: (frameId: string, fromInstance: string, toInstance: string, updates: Partial<EdgeConfig>) => void;
   updateEdgeByIndex: (frameId: string, edgeIndex: number, updates: Partial<EdgeConfig>) => void;
   setNextFrameTarget: (frameId: string, targetFrameId: string | null) => void;
+  setEdgeRoute: (routeKey: string, waypoints: { x: number; y: number }[] | null) => void;
+  clearAllEdgeRoutes: () => void;
 
   // Computed
   getUsageCount: (baseId: string) => number;
@@ -171,16 +181,25 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     })),
 
   removeRole: (id) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        roles: s.schema.roles.filter((r) => r.id !== id),
-        node_palette: s.schema.node_palette.filter((n) => n.role_id !== id),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const remainingRoles = s.schema.roles.filter((r) => r.id !== id);
+      const fallbackRoleId = remainingRoles[0]?.id;
+      const isSpecial = (n: NodeTemplate) => n.node_kind === 'storage' || n.node_kind === 'mediator';
+      // Storage / mediator templates are independent of any role: keep them and re-home to another lane.
+      const nodePalette = s.schema.node_palette
+        .filter((n) => n.role_id !== id || (isSpecial(n) && fallbackRoleId))
+        .map((n) => (n.role_id === id && fallbackRoleId ? { ...n, role_id: fallbackRoleId } : n));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: {
+          ...s.schema,
+          roles: remainingRoles,
+          node_palette: nodePalette,
+        },
+        isDirty: true,
+      };
+    }),
 
   addNodeTemplate: (template) =>
     set((s) => ({
@@ -401,7 +420,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       };
     }),
 
-  moveNodeToFrame: (fromFrameId, toFrameId, instanceId, newCustomX) =>
+  moveNodeToFrame: (fromFrameId, toFrameId, instanceId, newCustomX, assignedRoleId, insertIndex) =>
     set((s) => {
       let movingNode: NodeInstance | null = null;
       const updatedFrames = s.schema.frames.map((f) => {
@@ -424,6 +443,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       const finalNode: NodeInstance = {
         ...targetNode,
         custom_x: newCustomX !== undefined ? newCustomX : undefined,
+        custom_y: undefined,
+        ...(assignedRoleId ? { assigned_role_id: assignedRoleId } : {}),
       };
 
       return {
@@ -431,9 +452,14 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         future: [],
         schema: {
           ...s.schema,
-          frames: updatedFrames.map((f) =>
-            f.frame_id === toFrameId ? { ...f, nodes: [...f.nodes, finalNode] } : f
-          ),
+          frames: updatedFrames.map((f) => {
+            if (f.frame_id !== toFrameId) return f;
+            const nodes = [...f.nodes];
+            const index =
+              insertIndex === undefined ? nodes.length : Math.max(0, Math.min(insertIndex, nodes.length));
+            nodes.splice(index, 0, finalNode);
+            return { ...f, nodes };
+          }),
         },
         isDirty: true,
       };
@@ -491,12 +517,22 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
               ),
             };
           } else {
-            return {
-              ...f,
-              edges_config: [
-                ...f.edges_config,
-                {
-                  from_instance: fromInstance,
+  // Editing an auto-inferred edge turns the frame explicit: keep the other inferred edges alive.
+  const baseEdges: EdgeConfig[] =
+  f.edges_config.length > 0
+  ? f.edges_config
+  : f.nodes.slice(0, -1).map((n, i) => ({
+  from_instance: n.instance_id,
+  to_instance: f.nodes[i + 1].instance_id,
+  message_label: '',
+  flow_type: 'solid' as const,
+  }));
+  return {
+  ...f,
+  edges_config: [
+  ...baseEdges,
+  {
+  from_instance: fromInstance,
                   to_instance: toInstance,
                   message_label: updates.message_label || '',
                   flow_type: updates.flow_type || 'solid',
@@ -508,6 +544,30 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           }
         }),
       },
+      isDirty: true,
+    })),
+
+  setEdgeRoute: (routeKey, waypoints) =>
+    set((s) => {
+      const routes = { ...(s.schema.edge_routes || {}) };
+      if (waypoints && waypoints.length > 0) routes[routeKey] = { waypoints };
+      else delete routes[routeKey];
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: {
+          ...s.schema,
+          edge_routes: Object.keys(routes).length > 0 ? routes : undefined,
+        },
+        isDirty: true,
+      };
+    }),
+
+  clearAllEdgeRoutes: () =>
+    set((s) => ({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: { ...s.schema, edge_routes: undefined },
       isDirty: true,
     })),
 

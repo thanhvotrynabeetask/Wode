@@ -15,23 +15,22 @@ export function useGlobalKeybindings(allInstanceIds: string[], onFitToScreen?: (
       const activeTag = (document.activeElement?.tagName || '').toLowerCase();
       const isInputActive = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
-      // Always intercept Ctrl+W to prevent closing tab!
-      if (matchesShortcut(e, keybindings.modePan) || (e.ctrlKey && e.key.toLowerCase() === 'w')) {
+      // If user is actively typing in an input field, do not trigger canvas shortcuts
+      if (isInputActive) return;
+
+      if (matchesShortcut(e, keybindings.modePan)) {
         e.preventDefault();
         setInteractionMode('pan');
         addToast('info', 'Chế độ: Di chuyển Canvas (Pan)');
         return;
       }
 
-      if (matchesShortcut(e, keybindings.modeSelect) || (e.ctrlKey && e.key.toLowerCase() === 'q')) {
+      if (matchesShortcut(e, keybindings.modeSelect)) {
         e.preventDefault();
         setInteractionMode('select');
         addToast('info', 'Chế độ: Chọn và Kéo (Select)');
         return;
       }
-
-      // If user is actively typing in an input field, do not trigger canvas shortcuts
-      if (isInputActive) return;
 
       // Undo (Ctrl+Z)
       if (matchesShortcut(e, keybindings.undo) || (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'z')) {
@@ -53,8 +52,8 @@ export function useGlobalKeybindings(allInstanceIds: string[], onFitToScreen?: (
         return;
       }
 
-      // Select All (Ctrl+A)
-      if (matchesShortcut(e, keybindings.selectAll) || (e.ctrlKey && e.key.toLowerCase() === 'a')) {
+      // Select All (default Ctrl+Shift+A)
+      if (matchesShortcut(e, keybindings.selectAll)) {
         e.preventDefault();
         selectAllInstances(allInstanceIds);
         addToast('info', `Đã chọn tất cả ${allInstanceIds.length} nhiệm vụ`);

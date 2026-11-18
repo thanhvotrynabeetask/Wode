@@ -205,7 +205,7 @@ Xây dựng một ứng dụng web chạy **100% Offline (Local-first)** trên m
   * Người dùng có thể bật/tắt hiệu ứng Glow này trong tab *Giao Diện* của mục Cài Đặt.
 * [x] **4. Phím Tắt Nhanh Chuyển Chế Độ:**
   * `Ctrl + Q`: Chuyển sang chế độ **Chọn & Kéo Node**.
-  * `Ctrl + W`: Chuyển sang chế độ **Di Chuyển Canvas (Pan)** (hệ thống chặn sự kiện đóng tab của trình duyệt để đảm bảo an toàn).
+  * `Ctrl + A`: Chuyển sang chế độ **Di Chuyển Canvas (Pan)**; `Ctrl + Shift + A`: Chọn tất cả.
 * [x] **5. Bảng Quản Lý & Thay Đổi Phím Tắt (Keybinding Customizer):**
   * Tích hợp tab *Phím Tắt & Điều Khiển* trong Cài Đặt.
   * Cho phép người dùng click vào phím tắt bất kỳ và bấm tổ hợp phím mới trên bàn phím để gán lại theo thói quen cá nhân. Có nút khôi phục về mặc định.

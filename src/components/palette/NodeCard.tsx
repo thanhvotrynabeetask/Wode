@@ -2,7 +2,8 @@ import React from 'react';
 import { NodeTemplate } from '../../types/schema';
 import { Badge } from '../common/Badge';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
-import { MoreVertical, Edit2, Trash2, Plus, Database } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Plus, Database, ArrowLeftRight } from 'lucide-react';
+import { NODE_KIND_META, isSpecialKind } from '../../utils/nodeKind';
 
 interface NodeCardProps {
   template: NodeTemplate;
@@ -26,12 +27,17 @@ export const NodeCard: React.FC<NodeCardProps> = ({
   const [menuOpen, setMenuOpen] = React.useState(false);
   const isUnused = usageCount === 0;
   const isStorage = template.node_kind === 'storage';
+  const isMediator = template.node_kind === 'mediator';
+  const isSpecial = isSpecialKind(template.node_kind);
+  const kindMeta = isSpecialKind(template.node_kind) ? NODE_KIND_META[template.node_kind] : null;
 
   return (
     <div
       className={`group relative bg-white rounded-lg p-2.5 transition-all shadow-sm ${
         isStorage
           ? 'border-2 border-sky-300 bg-sky-50/20 hover:border-sky-400'
+          : isMediator
+          ? 'border-2 border-dashed border-violet-300 bg-violet-50/20 hover:border-violet-400'
           : isUnused
           ? 'border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/20'
           : 'border border-gray-200 hover:border-gray-300 hover:shadow'
@@ -40,12 +46,13 @@ export const NodeCard: React.FC<NodeCardProps> = ({
       <div className="flex items-start justify-between gap-1.5 mb-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
           {/* Icon Badge */}
-          {isStorage ? (
+          {isSpecial && kindMeta ? (
             <span
-              className="flex items-center justify-center w-5 h-5 rounded shrink-0 bg-sky-100 text-sky-700"
-              title="Storage Object / Trung gian"
+              className="flex items-center justify-center w-5 h-5 rounded shrink-0"
+              style={{ backgroundColor: `${kindMeta.color}1A`, color: kindMeta.color }}
+              title={kindMeta.tag}
             >
-              <Database size={12} />
+              {isStorage ? <Database size={12} /> : <ArrowLeftRight size={12} />}
             </span>
           ) : (
             <span
@@ -67,7 +74,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           <Badge
             count={usageCount}
-            color={isStorage ? '#0284C7' : isUnused ? '#F59E0B' : roleColor}
+            color={kindMeta ? kindMeta.color : isUnused ? '#F59E0B' : roleColor}
             className={isUnused ? 'bg-amber-100 text-amber-800 font-bold' : ''}
           />
 
@@ -111,10 +118,13 @@ export const NodeCard: React.FC<NodeCardProps> = ({
         </div>
       </div>
 
-      {isStorage && (
+      {kindMeta && (
         <div className="mb-1.5">
-          <span className="text-[9px] font-semibold tracking-wider text-sky-700 bg-sky-100 px-1.5 py-0.2 rounded uppercase">
-            Storage Object • Kéo đổi làn tự do
+          <span
+            className="text-[9px] font-semibold tracking-wider px-1.5 py-0.5 rounded uppercase"
+            style={{ color: kindMeta.color, backgroundColor: `${kindMeta.color}1A` }}
+          >
+            {kindMeta.tag} • Kéo đổi làn tự do
           </span>
         </div>
       )}
