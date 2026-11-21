@@ -44,11 +44,29 @@ const ToastItem: React.FC<ToastItemProps> = ({ id, type, message }) => {
 export const ToastContainer: React.FC = () => {
   const toasts = useUIStore((s) => s.toasts);
   if (toasts.length === 0) return null;
+
+  // Max 4 toasts visible; extras stack below (chồng line) when more than 4 arrive
+  const visible = toasts.slice(0, 4);
+  const overflow = toasts.length - visible.length;
+
   return (
-    <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 w-80">
-      {toasts.map((t) => (
+    <div
+      className="fixed z-[100] flex flex-col gap-2 w-80"
+      style={{
+        // Giữa cạnh phải màn hình — không bottom, không top, không bị phủ bởi toolbar
+        top: '50%',
+        right: '16px',
+        transform: 'translateY(-50%)',
+      }}
+    >
+      {visible.map((t) => (
         <ToastItem key={t.id} {...t} />
       ))}
+      {overflow > 0 && (
+        <div className="text-[11px] text-gray-500 dark:text-slate-400 text-center px-2">
+          +{overflow} thông báo khác đang chờ
+        </div>
+      )}
     </div>
   );
 };

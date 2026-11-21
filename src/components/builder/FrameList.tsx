@@ -112,6 +112,9 @@ export const FrameList: React.FC = () => {
               onUpdateNodeLabel={(instanceId, label) =>
                 updateNodeInstance(frame.frame_id, instanceId, { custom_label: label })
               }
+              onUpdateNodeListings={(instanceId, listings) =>
+                updateNodeInstance(frame.frame_id, instanceId, { listings })
+              }
               onUpdateEdges={(edges) => setEdgeConfig(frame.frame_id, edges)}
               onUpdateNextFrameTarget={(targetId) =>
                 setNextFrameTarget(frame.frame_id, targetId)
@@ -126,7 +129,7 @@ export const FrameList: React.FC = () => {
         <ConfirmDialog
           isOpen={true}
           title="Xóa Phân Đoạn (Frame)"
-          message={`Bạn có chắc muốn xóa "${frameToDelete.title}" cùng toàn bộ ${frameToDelete.nodes.length} nhiệm vụ bên trong?`}
+          message={`Bạn có chắc muốn xóa \"${frameToDelete.title}\" cùng toàn bộ ${frameToDelete.nodes.length} nhiệm vụ bên trong?`}
           confirmLabel="Xóa"
           variant="danger"
           onConfirm={() => {

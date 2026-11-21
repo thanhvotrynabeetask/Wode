@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Frame, NodeTemplate, Role } from '../../types/schema';
+import { Frame, NodeTemplate, Role, NodeListingItem } from '../../types/schema';
 import { FrameNodeSlot } from './FrameNodeSlot';
 import { EdgeConfigurator } from './EdgeConfigurator';
 import {
@@ -31,6 +31,7 @@ interface FrameCardProps {
   onRemoveNode: (instanceId: string) => void;
   onReorderNodes: (instanceIds: string[]) => void;
   onUpdateNodeLabel: (instanceId: string, label: string | null) => void;
+  onUpdateNodeListings: (instanceId: string, listings: NodeListingItem[]) => void;
   onUpdateEdges: (edges: any[]) => void;
   onUpdateNextFrameTarget: (targetId: string | null) => void;
 }
@@ -52,6 +53,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
   onRemoveNode,
   onReorderNodes,
   onUpdateNodeLabel,
+  onUpdateNodeListings,
   onUpdateEdges,
   onUpdateNextFrameTarget,
 }) => {
@@ -222,6 +224,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                     onMoveUp={() => handleNodeMove(nodeIdx, 'up')}
                     onMoveDown={() => handleNodeMove(nodeIdx, 'down')}
                     onUpdateCustomLabel={(label) => onUpdateNodeLabel(node.instance_id, label)}
+                    onUpdateNodeListings={onUpdateNodeListings}
                   />
                 );
               })}

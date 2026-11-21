@@ -15,6 +15,10 @@ export const CANVAS_DEFAULTS = {
   LANE_MIN_HEIGHT: 100,
   FRAME_PADDING: 24,
   NODE_MARGIN: 16,
+  /** Minimum horizontal gap that still lets a message pill display legibly. */
+  MIN_SPACING: 24,
+  /** Default horizontal gap — the tightest that keeps messages readable. */
+  DEFAULT_SPACING: 24,
 };
 
 export const LOG_LEVELS = {

@@ -4,10 +4,33 @@ export type CornerSymbol = 'user-action' | 'bot' | 'check' | 'timer' | 'none';
 export type FlowType = 'solid' | 'dashed' | 'dotted';
 export type NodeKind = 'standard' | 'storage' | 'mediator'; // 'storage' & 'mediator' can freely magnet across swimlanes
 
+/** Listing item types for node details */
+export type ListingItemType = 'skill' | 'ai_model' | 'ai_agent' | 'connector' | 'tool' | 'custom';
+
+/** Symbol mapping for listing item types */
+export const LISTING_ITEM_SYMBOLS: Record<ListingItemType, { icon: string; label: string }> = {
+  skill: { icon: '🧠', label: 'Skill' },
+  ai_model: { icon: '🤖', label: 'AI Model' },
+  ai_agent: { icon: '👤', label: 'AI Agent' },
+  connector: { icon: '🔌', label: 'Connector' },
+  tool: { icon: '🛠️', label: 'Tool' },
+  custom: { icon: '📝', label: 'Custom' },
+};
+
+export interface NodeListingItem {
+  id: string;
+  type: ListingItemType;
+  name: string;
+  /** Optional description */
+  description?: string;
+}
+
 export interface Role {
   id: string;
   name: string;
   color: string;
+  /** Custom lane height (px). When set, overrides the auto-calculated height. */
+  custom_height?: number;
 }
 
 export interface NodeTemplate {
@@ -28,6 +51,12 @@ export interface NodeInstance {
   custom_x?: number; // User dragged X offset/position
   custom_y?: number; // Snapped Y position in lane
   assigned_role_id?: string; // If special node was magneted into a specific lane
+  /** Expandable list of items (skills, AI models, agents, connectors, tools) */
+  listings?: NodeListingItem[];
+  /** Custom node width (px). When set, overrides the default width. */
+  custom_width?: number;
+  /** Custom node height (px). When set, overrides the auto-calculated height. */
+  custom_height?: number;
 }
 
 export interface EdgeConfig {

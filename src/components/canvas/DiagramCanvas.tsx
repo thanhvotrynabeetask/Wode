@@ -37,6 +37,7 @@ export const DiagramCanvas: React.FC = () => {
     updateMultipleNodesPositions,
     moveNodeToFrame,
     updateNodeInstance,
+    updateRole,
     updateEdge,
     setEdgeRoute,
     clearAllEdgeRoutes,
@@ -48,6 +49,7 @@ export const DiagramCanvas: React.FC = () => {
     panX,
     panY,
     selection,
+    expandedListings,
     setZoom,
     setPan,
     toggleSelectInstance,
@@ -57,6 +59,7 @@ export const DiagramCanvas: React.FC = () => {
     setHighlightedPath,
     clearSelection,
     addToast,
+    toggleListing,
   } = useUIStore();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,8 +100,8 @@ export const DiagramCanvas: React.FC = () => {
   } | null>(null);
 
   const layout = useMemo(() => {
-    return LayoutEngine.calculate(schema);
-  }, [schema]);
+    return LayoutEngine.calculate(schema, expandedListings);
+  }, [schema, expandedListings]);
 
   const allInstanceIds = useMemo(() => {
     return layout.nodes.map((n) => n.instanceId);
@@ -584,7 +587,11 @@ export const DiagramCanvas: React.FC = () => {
           </defs>
 
           {/* Layer 1: Swimlanes */}
-          <SwimlaneRenderer swimlanes={layout.swimlanes} isDark={isDark} />
+          <SwimlaneRenderer
+            swimlanes={layout.swimlanes}
+            isDark={isDark}
+            onUpdateLaneSize={(roleId, height) => updateRole(roleId, { custom_height: height })}
+          />
 
           {/* Layer 2: Frame Overlays */}
           <FrameOverlayRenderer
@@ -629,6 +636,7 @@ export const DiagramCanvas: React.FC = () => {
                   isHighlighted={selection.highlightedPath.includes(node.instanceId)}
                   isDark={isDark}
                   enableDarkGlow={enableDarkGlow}
+                  listingsExpanded={expandedListings.has(node.instanceId)}
                   onSelect={(e) => handleNodeClick(e, node.instanceId, node.frameId)}
                   onHoverStart={() => handleNodeHoverStart(node.instanceId)}
                   onHoverEnd={handleNodeHoverEnd}
@@ -636,6 +644,11 @@ export const DiagramCanvas: React.FC = () => {
                   onUpdateLabel={(newLabel) =>
                     updateNodeInstance(node.frameId, node.instanceId, { custom_label: newLabel })
                   }
+                  onToggleListings={() => toggleListing(node.instanceId)}
+                  onUpdateSize={(w, h) =>
+                    updateNodeInstance(node.frameId, node.instanceId, { custom_width: w, custom_height: h })
+                  }
+                  zoom={zoom}
                 />
               );
             })}

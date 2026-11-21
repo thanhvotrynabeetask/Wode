@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { LayoutNode } from '../../services/LayoutEngine';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
-import { Database, ArrowLeftRight, Check, X } from 'lucide-react';
+import { Database, ArrowLeftRight, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { NODE_KIND_META } from '../../utils/nodeKind';
+import { LISTING_ITEM_SYMBOLS } from '../../types/schema';
 
 interface NodeRendererProps {
   node: LayoutNode;
@@ -15,6 +16,10 @@ interface NodeRendererProps {
   onHoverEnd: () => void;
   onStartDrag: (e: React.MouseEvent, node: LayoutNode) => void;
   onUpdateLabel?: (newLabel: string) => void;
+  onToggleListings?: (instanceId: string) => void;
+  listingsExpanded?: boolean;
+  onUpdateSize?: (width: number, height: number) => void;
+  zoom?: number;
 }
 
 export const NodeRenderer: React.FC<NodeRendererProps> = ({
@@ -28,15 +33,22 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
   onHoverEnd,
   onStartDrag,
   onUpdateLabel,
+  onToggleListings,
+  listingsExpanded = false,
+  onUpdateSize,
+  zoom = 1,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(node.customLabel || '');
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
 
   const isStorage = node.nodeKind === 'storage';
   const isMediator = node.nodeKind === 'mediator';
   const isSpecial = isStorage || isMediator;
   const kindColor = isSpecial ? NODE_KIND_META[node.nodeKind as 'storage' | 'mediator'].color : node.color;
   const kindTag = isSpecial ? NODE_KIND_META[node.nodeKind as 'storage' | 'mediator'].tag : '';
+
+  const hasListings = node.listings && node.listings.length > 0;
 
   const handleSaveEdit = () => {
     if (onUpdateLabel) {
@@ -82,6 +94,31 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
     : isMediator
     ? 'text-violet-900'
     : 'text-slate-900';
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onUpdateSize) return;
+    e.preventDefault();
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, startW: node.width, startH: node.height };
+
+    const move = (ev: MouseEvent) => {
+      const ref = resizeRef.current;
+      if (!ref) return;
+      const dx = ev.clientX - ref.startX;
+      const dy = ev.clientY - ref.startY;
+      const factor = zoom || 1;
+      const newW = Math.max(120, Math.round(ref.startW + dx / factor));
+      const newH = Math.max(60, Math.round(ref.startH + dy / factor));
+      onUpdateSize(newW, newH);
+    };
+    const up = () => {
+      resizeRef.current = null;
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
 
   return (
     <g
@@ -201,6 +238,20 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
               </span>
             </div>
 
+            {/* Listing toggle indicator */}
+            {hasListings && (
+              <button
+                className="pointer-events-auto p-0.5 text-gray-400 hover:text-blue-500 transition-colors shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onToggleListings) onToggleListings(node.instanceId);
+                }}
+                title={listingsExpanded ? 'Thu gọn danh sách' : 'Mở danh sách'}
+              >
+                {listingsExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              </button>
+            )}
+
             {!isSpecial && node.cornerSymbol !== 'none' && (
               <span
                 className="w-4 h-4 rounded flex items-center justify-center shrink-0 text-[10px]"
@@ -211,8 +262,8 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
             )}
           </div>
 
-          {/* Bottom Area: Description / Note */}
-          <div className="flex-1 mt-1 flex flex-col justify-center">
+          {/* Bottom Area: Description / Note + Listings */}
+          <div className="flex-1 mt-1 flex flex-col justify-center min-h-0">
             {isEditing ? (
               <div
                 className="flex items-center gap-1 pointer-events-auto"
@@ -250,29 +301,74 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                   <X size={12} />
                 </button>
               </div>
-            ) : isSpecial ? (
-              <span
-                className="text-[10px] font-semibold tracking-wide uppercase truncate"
-                style={{ color: kindColor }}
-              >
-                {node.customLabel || kindTag}
-              </span>
-            ) : node.customLabel ? (
-              <p
-                className={`text-[11px] leading-snug break-words whitespace-normal line-clamp-4 ${
-                  isDark ? 'text-slate-300' : 'text-slate-600'
-                }`}
-              >
-                {node.customLabel}
-              </p>
             ) : (
-              <span className="text-[10px] text-gray-400 italic">
-                (Nhấp đúp để thêm chú thích)
-              </span>
+              <>
+                {/* Description / Label */}
+                {isSpecial ? (
+                  <span
+                    className="text-[10px] font-semibold tracking-wide uppercase truncate"
+                    style={{ color: kindColor }}
+                  >
+                    {node.customLabel || kindTag}
+                  </span>
+                ) : node.customLabel ? (
+                  <p
+                    className={`text-[11px] leading-snug break-words whitespace-normal line-clamp-2 ${
+                      isDark ? 'text-slate-300' : 'text-slate-600'
+                    }`}
+                  >
+                    {node.customLabel}
+                  </p>
+                ) : (
+                  <span className="text-[10px] text-gray-400 italic">
+                    (Nhấp đúp để thêm chú thích)
+                  </span>
+                )}
+
+                {/* Collapsible Listing Items */}
+                {hasListings && listingsExpanded && (
+                  <div className="mt-1 space-y-0.5">
+                    {node.listings!.map((item) => {
+                      const symbol = LISTING_ITEM_SYMBOLS[item.type];
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center gap-1 text-[10px] ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}
+                        >
+                          <span className="shrink-0">{symbol.icon}</span>
+                          <span className="truncate">{item.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Listing count badge when collapsed */}
+                {hasListings && !listingsExpanded && (
+                  <span className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                    📋 {node.listings!.length} mục
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
       </foreignObject>
+
+      {/* Resize Handle (bottom-right corner) */}
+      {onUpdateSize && (
+        <rect
+          x={node.width - 10}
+          y={node.height - 10}
+          width={10}
+          height={10}
+          fill="transparent"
+          style={{ cursor: 'nwse-resize' }}
+          onMouseDown={handleResizeStart}
+        />
+      )}
     </g>
   );
 };

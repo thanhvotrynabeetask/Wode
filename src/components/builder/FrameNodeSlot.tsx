@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { NodeInstance, NodeTemplate, Role } from '../../types/schema';
+import { NodeInstance, NodeTemplate, Role, NodeListingItem, ListingItemType } from '../../types/schema';
+import { LISTING_ITEM_SYMBOLS } from '../../types/schema';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
 import { NODE_KIND_META, isSpecialKind } from '../../utils/nodeKind';
-import { ChevronUp, ChevronDown, Trash2, Edit3, Check, X } from 'lucide-react';
+import { ChevronUp, ChevronDown, Trash2, Edit3, Check, X, Plus, List } from 'lucide-react';
 
 interface FrameNodeSlotProps {
   node: NodeInstance;
@@ -16,7 +17,17 @@ interface FrameNodeSlotProps {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onUpdateCustomLabel: (label: string | null) => void;
+  onUpdateNodeListings: (instanceId: string, listings: NodeListingItem[]) => void;
 }
+
+const LISTING_TYPES: { value: ListingItemType; label: string }[] = [
+  { value: 'skill', label: 'Skill' },
+  { value: 'ai_model', label: 'AI Model' },
+  { value: 'ai_agent', label: 'AI Agent' },
+  { value: 'connector', label: 'Connector (API/MCP)' },
+  { value: 'tool', label: 'Tool (trả phí)' },
+  { value: 'custom', label: 'Khác' },
+];
 
 export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
   node,
@@ -30,18 +41,39 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
   onMoveUp,
   onMoveDown,
   onUpdateCustomLabel,
+  onUpdateNodeListings,
 }) => {
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelText, setLabelText] = useState(node.custom_label || '');
+  const [showListingEditor, setShowListingEditor] = useState(false);
+  const [newListingName, setNewListingName] = useState('');
+  const [newListingType, setNewListingType] = useState<ListingItemType>('skill');
 
   const kind = node.node_kind || template?.node_kind;
   const kindMeta = isSpecialKind(kind) ? NODE_KIND_META[kind] : null;
   const roleColor = role?.color || kindMeta?.color || '#3B82F6';
   const displayTitle = node.custom_label || node.title;
+  const listings = node.listings || [];
 
   const handleSaveLabel = () => {
     onUpdateCustomLabel(labelText.trim() ? labelText.trim() : null);
     setEditingLabel(false);
+  };
+
+  const handleAddListing = () => {
+    if (!newListingName.trim()) return;
+    const newItem: NodeListingItem = {
+      id: `li_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type: newListingType,
+      name: newListingName.trim(),
+    };
+    onUpdateNodeListings(node.instance_id, [...listings, newItem]);
+    setNewListingName('');
+    setNewListingType('skill');
+  };
+
+  const handleRemoveListing = (id: string) => {
+    onUpdateNodeListings(node.instance_id, listings.filter((li) => li.id !== id));
   };
 
   return (
@@ -165,6 +197,85 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
           </div>
         )}
       </div>
+
+      {/* Listing Toggle & Editor */}
+      <div className="mt-1.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={() => setShowListingEditor(!showListingEditor)}
+          className={`flex items-center gap-1 text-[10px] font-medium rounded px-1.5 py-0.5 transition-colors ${
+            listings.length > 0
+              ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+              : 'text-gray-400 hover:text-blue-600 hover:bg-gray-50'
+          }`}
+        >
+          <List size={10} />
+          {listings.length > 0 ? `📋 ${listings.length} mục` : 'Thêm danh sách'}
+        </button>
+        {showListingEditor && (
+          <span className="text-[9px] text-gray-400">bấm để edit</span>
+        )}
+      </div>
+
+      {/* Full Listing Editor in Side Panel */}
+      {showListingEditor && (
+        <div className="mt-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          {/* Existing Items */}
+          {listings.length > 0 && (
+            <div className="space-y-1">
+              {listings.map((item) => {
+                const symbol = LISTING_ITEM_SYMBOLS[item.type];
+                return (
+                  <div key={item.id} className="flex items-center gap-1.5 text-[11px] group/item">
+                    <span className="shrink-0">{symbol.icon}</span>
+                    <span className="flex-1 truncate text-gray-700">{item.name}</span>
+                    <span className="text-[9px] text-gray-400 shrink-0">{symbol.label}</span>
+                    <button
+                      onClick={() => handleRemoveListing(item.id)}
+                      className="p-0.5 text-gray-300 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-opacity"
+                      title="Xóa"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Add New Item */}
+          <div className="flex items-center gap-1.5">
+            <select
+              value={newListingType}
+              onChange={(e) => setNewListingType(e.target.value as ListingItemType)}
+              className="text-[10px] border border-gray-200 rounded px-1 py-0.5 outline-none bg-white max-w-[90px]"
+            >
+              {LISTING_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {LISTING_ITEM_SYMBOLS[t.value].icon} {t.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Tên..."
+              value={newListingName}
+              onChange={(e) => setNewListingName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddListing();
+              }}
+              className="flex-1 text-[10px] border border-gray-200 rounded px-1.5 py-0.5 outline-none bg-white"
+            />
+            <button
+              onClick={handleAddListing}
+              disabled={!newListingName.trim()}
+              className="p-1 text-green-600 hover:bg-green-50 disabled:opacity-30 rounded transition-colors"
+              title="Thêm"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

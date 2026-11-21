@@ -18,11 +18,13 @@ interface UIActions {
   clearSelection: () => void;
   openSettings: () => void;
   closeSettings: () => void;
+  toggleSidebar: () => void;
+  toggleListing: (instanceId: string) => void;
   addToast: (type: Toast['type'], message: string) => void;
   removeToast: (id: string) => void;
 }
 
-export const useUIStore = create<UIState & UIActions>()((set) => ({
+export const useUIStore = create<UIState & UIActions & { expandedListings: Set<string> }>()((set) => ({
   activePanel: 'palette',
   interactionMode: 'select',
   zoom: 1,
@@ -35,6 +37,8 @@ export const useUIStore = create<UIState & UIActions>()((set) => ({
     highlightedPath: [],
   },
   isSettingsOpen: false,
+  isSidebarExpanded: true,
+  expandedListings: new Set<string>(),
   toasts: [],
 
   setActivePanel: (panel) => set({ activePanel: panel }),
@@ -113,6 +117,14 @@ export const useUIStore = create<UIState & UIActions>()((set) => ({
 
   openSettings: () => set({ isSettingsOpen: true }),
   closeSettings: () => set({ isSettingsOpen: false }),
+  toggleSidebar: () => set((s) => ({ isSidebarExpanded: !s.isSidebarExpanded })),
+  toggleListing: (instanceId) =>
+    set((s) => {
+      const next = new Set(s.expandedListings);
+      if (next.has(instanceId)) next.delete(instanceId);
+      else next.add(instanceId);
+      return { expandedListings: next };
+    }),
 
   addToast: (type, message) =>
     set((s) => ({

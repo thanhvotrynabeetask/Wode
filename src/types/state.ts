@@ -22,5 +22,6 @@ export interface UIState {
   panY: number;
   selection: SelectionState;
   isSettingsOpen: boolean;
+  isSidebarExpanded: boolean;
   toasts: Toast[];
 }

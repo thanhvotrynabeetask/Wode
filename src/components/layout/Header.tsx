@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Save, Settings, FolderOpen, FilePlus, Download, Upload } from 'lucide-react';
+import { Save, Settings, FolderOpen, FilePlus, Download, Upload, ChevronDown } from 'lucide-react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
 import { Button } from '../common/Button';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { FileSystemService } from '../../services/FileSystemService';
-import { ExportService } from '../../services/ExportService';
+import { ExportService, ExportOptions } from '../../services/ExportService';
 import { ImportService } from '../../services/ImportService';
 import { APP_NAME } from '../../utils/constants';
 
@@ -17,8 +17,10 @@ export const Header: React.FC = () => {
   const [showNewConfirm, setShowNewConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const exportButtonRef = useRef<HTMLDivElement>(null);
 
   const handleNameBlur = () => {
     setEditingName(false);
@@ -39,11 +41,13 @@ export const Header: React.FC = () => {
     }
   };
 
-  const handleExportHTML = async () => {
+  const handleExportHTML = async (darkMode: boolean) => {
+    setShowExportMenu(false);
     setIsExporting(true);
     try {
-      const fileName = await ExportService.exportHTML(schema);
-      addToast('success', `Đã xuất HTML thành công: ${fileName}`);
+      const options: ExportOptions = { darkMode };
+      const fileName = await ExportService.exportHTML(schema, options);
+      addToast('success', `Đã xuất HTML ${darkMode ? '(Dark Mode)' : '(Light Mode)'}: ${fileName}`);
     } catch (err) {
       addToast('error', `Lỗi khi xuất HTML: ${(err as Error).message}`);
     } finally {
@@ -63,7 +67,6 @@ export const Header: React.FC = () => {
     } catch (err) {
       addToast('error', `Không thể mở file: ${(err as Error).message}`);
     } finally {
-      // reset input value so re-selecting same file triggers change
       e.target.value = '';
     }
   };
@@ -78,9 +81,21 @@ export const Header: React.FC = () => {
     }
   };
 
+  // Close export menu when clicking outside
+  React.useEffect(() => {
+    if (!showExportMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (exportButtonRef.current && !exportButtonRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showExportMenu]);
+
   return (
     <>
-      <header className="h-12 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center px-4 gap-3 shrink-0 z-20">
+      <header className="h-12 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center px-4 gap-3 shrink-0 z-[60]">
         {/* Hidden File Input for Open / Import */}
         <input
           type="file"
@@ -180,16 +195,42 @@ export const Header: React.FC = () => {
           Import
         </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={<Download size={15} />}
-          loading={isExporting}
-          onClick={handleExportHTML}
-          title="Xuất file HTML độc lập chứa toàn bộ sơ đồ"
-        >
-          Export HTML
-        </Button>
+        {/* Export Dropdown */}
+        <div ref={exportButtonRef} className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Download size={15} />}
+            loading={isExporting}
+            onClick={() => setShowExportMenu((v) => !v)}
+            title="Xuất file HTML độc lập chứa toàn bộ sơ đồ"
+          >
+            Export
+            <ChevronDown size={12} className="ml-0.5" />
+          </Button>
+
+          {showExportMenu && (
+            <div
+              className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <button
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                onClick={() => handleExportHTML(false)}
+              >
+                <span className="w-3 h-3 rounded-full bg-white border border-gray-300" />
+                Light Mode
+              </button>
+              <button
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                onClick={() => handleExportHTML(true)}
+              >
+                <span className="w-3 h-3 rounded-full bg-slate-900 border border-slate-600" />
+                Dark Mode + Glow
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="w-px h-5 bg-gray-200 mx-1" />
 

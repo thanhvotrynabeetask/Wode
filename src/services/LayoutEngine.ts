@@ -1,4 +1,4 @@
-import { ProjectSchema, Role, NodeTemplate, FlowType, CornerSymbol, NodeKind } from '../types/schema';
+import { ProjectSchema, Role, NodeTemplate, FlowType, CornerSymbol, NodeKind, NodeListingItem } from '../types/schema';
 import { CANVAS_DEFAULTS } from '../utils/constants';
 import { NODE_KIND_META } from '../utils/nodeKind';
 import { Point, pointsToPath, routeEdges, RouteRequest } from './EdgeRouter';
@@ -22,6 +22,8 @@ export interface LayoutNode {
   height: number;
   laneY: number;
   laneHeight: number;
+  /** Expandable list of items (skills, AI models, agents, connectors, tools) */
+  listings?: NodeListingItem[];
 }
 
 export interface LayoutEdge {
@@ -84,7 +86,7 @@ interface RawEdgeSpec {
 }
 
 export class LayoutEngine {
-  public static calculate(schema: ProjectSchema): LayoutResult {
+  public static calculate(schema: ProjectSchema, expandedListings: Set<string> = new Set()): LayoutResult {
     const roles = schema.roles;
     const frames = schema.frames;
     const templateMap = new Map<string, NodeTemplate>(
@@ -92,7 +94,7 @@ export class LayoutEngine {
     );
     const roleMap = new Map<string, Role>(roles.map((r) => [r.id, r]));
 
-    const nodeWidth = CANVAS_DEFAULTS.NODE_WIDTH;
+    const defaultNodeWidth = CANVAS_DEFAULTS.NODE_WIDTH;
     const laneHeaderWidth = 140;
     const frameGap = 36;
     const nodeGapX = schema.settings.horizontal_spacing !== undefined ? schema.settings.horizontal_spacing : 40;
@@ -101,6 +103,10 @@ export class LayoutEngine {
 
     // Helper: Calculate dynamic height of a node instance based on its text content
     const computeNodeHeight = (nodeInst: typeof frames[0]['nodes'][0]): number => {
+      // If user has set a custom height, respect it.
+      if (nodeInst.custom_height !== undefined && nodeInst.custom_height > 0) {
+        return nodeInst.custom_height;
+      }
       const customLabel = nodeInst.custom_label || '';
       let height = CANVAS_DEFAULTS.NODE_HEIGHT; // base 60px
       if (customLabel.length > 18) {
@@ -108,7 +114,23 @@ export class LayoutEngine {
         const extraLines = Math.ceil((customLabel.length - 18) / 18);
         height += extraLines * 16;
       }
+      // Extra height for listing items only when the list is expanded on canvas
+      if (
+        nodeInst.listings &&
+        nodeInst.listings.length > 0 &&
+        expandedListings.has(nodeInst.instance_id)
+      ) {
+        height += nodeInst.listings.length * 14 + 10;
+      }
       return height;
+    };
+
+    // Helper: Get node width (custom if set, else default)
+    const computeNodeWidth = (nodeInst: typeof frames[0]['nodes'][0]): number => {
+      if (nodeInst.custom_width !== undefined && nodeInst.custom_width > 0) {
+        return nodeInst.custom_width;
+      }
+      return defaultNodeWidth;
     };
 
     // 1. Calculate Dynamic Heights for each Swimlane
@@ -147,7 +169,11 @@ export class LayoutEngine {
     roles.forEach((role) => {
       const maxNodeH = roleMaxHeightMap.get(role.id) || CANVAS_DEFAULTS.NODE_HEIGHT;
       // Lane height accommodates the tallest node in this lane + margins
-      const laneHeight = Math.max(CANVAS_DEFAULTS.LANE_MIN_HEIGHT, maxNodeH + 48);
+      // If role has a custom_height, use that (but still ensure it fits the tallest node).
+      let laneHeight = Math.max(CANVAS_DEFAULTS.LANE_MIN_HEIGHT, maxNodeH + 48);
+      if (role.custom_height !== undefined && role.custom_height > 0) {
+        laneHeight = Math.max(laneHeight, role.custom_height);
+      }
 
       roleYMap.set(role.id, { y: currentLaneY, height: laneHeight });
       swimlanes.push({
@@ -175,7 +201,7 @@ export class LayoutEngine {
       let frameContentWidth = 0;
 
       if (frame.nodes.length === 0) {
-        frameContentWidth = nodeWidth + 30;
+        frameContentWidth = defaultNodeWidth + 30;
         currentX += frameContentWidth + frameGap;
       } else {
         let maxNodeRightX = frameStartX;
@@ -190,6 +216,7 @@ export class LayoutEngine {
           const laneInfo = roleYMap.get(roleId) || { y: topMargin, height: 130 };
 
           const nodeHeight = computeNodeHeight(nodeInst);
+          const nodeWidth = computeNodeWidth(nodeInst);
 
           // Default X position
           const defaultX = currentX + nIdx * (nodeWidth + nodeGapX);
@@ -219,6 +246,7 @@ export class LayoutEngine {
             height: nodeHeight,
             laneY: laneInfo.y,
             laneHeight: laneInfo.height,
+            listings: nodeInst.listings,
           };
 
           layoutNodes.push(layoutNode);
@@ -230,7 +258,7 @@ export class LayoutEngine {
         });
 
         frameContentWidth = Math.max(
-          frame.nodes.length * nodeWidth + Math.max(0, frame.nodes.length - 1) * nodeGapX,
+          frame.nodes.length * defaultNodeWidth + Math.max(0, frame.nodes.length - 1) * nodeGapX,
           maxNodeRightX - frameStartX
         );
         currentX += frameContentWidth + frameGap;
