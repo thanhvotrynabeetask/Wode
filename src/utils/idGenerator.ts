@@ -17,3 +17,7 @@ export function generateRoleId(): string {
 export function generateNodeId(): string {
   return generateId('node');
 }
+
+export function generateDiagramId(): string {
+  return generateId('diag');
+}

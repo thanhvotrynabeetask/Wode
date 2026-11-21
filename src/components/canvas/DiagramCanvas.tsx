@@ -8,8 +8,9 @@ import { FrameOverlayRenderer } from './FrameOverlayRenderer';
 import { EdgeRenderer } from './EdgeRenderer';
 import { NodeRenderer } from './NodeRenderer';
 import { EdgeEditorModal } from './EdgeEditorModal';
-import { EdgeRouteHandles, STRAIGHT_EDGE_HANDLE } from './EdgeRouteHandles';
-import { Point, buildManualPoints, extractWaypoints, pointsToPath } from '../../services/EdgeRouter';
+import { EdgeRouteHandles, STRAIGHT_EDGE_HANDLE, EdgeHandleType } from './EdgeRouteHandles';
+import { Point, buildManualPoints, extractWaypoints, pointsToPath, anchorToPoint, pointToBorderAnchor, buildOrthogonalConnector } from '../../services/EdgeRouter';
+import { NodeBorderAnchor } from '../../types/schema';
 import { CanvasSubToolbar } from './CanvasSubToolbar';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useGlobalKeybindings } from '../../hooks/useGlobalKeybindings';
@@ -41,6 +42,7 @@ export const DiagramCanvas: React.FC = () => {
     updateEdge,
     setEdgeRoute,
     clearAllEdgeRoutes,
+    setActiveDiagram,
   } = useProjectStore();
 
   const {
@@ -81,12 +83,17 @@ export const DiagramCanvas: React.FC = () => {
   const [routeEditKey, setRouteEditKey] = useState<string | null>(null);
   const [routeDrag, setRouteDrag] = useState<{
     edge: LayoutEdge;
+    dragType: EdgeHandleType;
     segmentIndex: number;
     basePoints: Point[];
     startClientX: number;
     startClientY: number;
     rawPoints: Point[];
     previewPoints: Point[];
+    fromNode: LayoutNode;
+    toNode: LayoutNode;
+    sourceAnchor?: NodeBorderAnchor;
+    targetAnchor?: NodeBorderAnchor;
     moved: boolean;
   } | null>(null);
 
@@ -112,6 +119,30 @@ export const DiagramCanvas: React.FC = () => {
     theme === 'dark' ||
     (theme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
+  // Viewport bounds clamping to prevent free-roaming out of bounds
+  const clampPan = useCallback(
+    (x: number, y: number, currentZoom: number) => {
+      const vpW = containerRef.current?.clientWidth || 1000;
+      const vpH = containerRef.current?.clientHeight || 800;
+      const diagramW = layout.canvasWidth * currentZoom;
+      const diagramH = layout.canvasHeight * currentZoom;
+
+      const padX = Math.max(80, Math.min(220, vpW * 0.25));
+      const padY = Math.max(60, Math.min(180, vpH * 0.25));
+
+      const minX = Math.min(-padX, vpW - diagramW - padX);
+      const maxX = Math.max(padX, vpW - diagramW + padX);
+      const minY = Math.min(-padY, vpH - diagramH - padY);
+      const maxY = Math.max(padY, vpH - diagramH + padY);
+
+      return {
+        x: Math.max(minX, Math.min(maxX, x)),
+        y: Math.max(minY, Math.min(maxY, y)),
+      };
+    },
+    [layout.canvasWidth, layout.canvasHeight]
+  );
+
   // Handle Pan via canvas background mouse drag
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
@@ -134,26 +165,99 @@ export const DiagramCanvas: React.FC = () => {
     (e: MouseEvent) => {
       if (routeDrag) {
         const snapToGrid = (v: number) => Math.round(v / 10) * 10;
-        const { basePoints, segmentIndex } = routeDrag;
-        const raw = basePoints.map((p) => ({ ...p }));
-        const a = raw[segmentIndex];
-        const b = raw[segmentIndex + 1];
-        if (Math.abs(a.y - b.y) < 0.01) {
-          const y = snapToGrid(a.y + (e.clientY - routeDrag.startClientY) / zoom);
-          a.y = y;
-          b.y = y;
-        } else {
-          const x = snapToGrid(a.x + (e.clientX - routeDrag.startClientX) / zoom);
-          a.x = x;
-          b.x = x;
+
+        if (routeDrag.dragType === 'start') {
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          const canvasX = (e.clientX - rect.left - panX) / zoom;
+          const canvasY = (e.clientY - rect.top - panY) / zoom;
+
+          const newAnchor = pointToBorderAnchor(routeDrag.fromNode, { x: canvasX, y: canvasY });
+          const newStart = anchorToPoint(routeDrag.fromNode, newAnchor);
+          const currentEnd = routeDrag.basePoints[routeDrag.basePoints.length - 1];
+          const targetSide = routeDrag.targetAnchor?.side || 'left';
+
+          const raw = [newStart, ...routeDrag.basePoints.slice(1)];
+          const waypoints = extractWaypoints(raw);
+          const preview =
+            waypoints.length > 0
+              ? buildManualPoints(newStart, currentEnd, waypoints, newAnchor.side, targetSide)
+              : buildOrthogonalConnector(newStart, currentEnd, newAnchor.side, targetSide);
+
+          setRouteDrag((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  rawPoints: raw,
+                  previewPoints: preview || [newStart, currentEnd],
+                  sourceAnchor: newAnchor,
+                  moved: true,
+                }
+              : null
+          );
+          return;
         }
-        const waypoints = extractWaypoints(raw);
-        const normalized =
-          waypoints.length > 0 ? buildManualPoints(raw[0], raw[raw.length - 1], waypoints) : null;
-        setRouteDrag((prev) =>
-          prev ? { ...prev, rawPoints: raw, previewPoints: normalized || raw, moved: true } : null
-        );
-        return;
+
+        if (routeDrag.dragType === 'end') {
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          const canvasX = (e.clientX - rect.left - panX) / zoom;
+          const canvasY = (e.clientY - rect.top - panY) / zoom;
+
+          const newAnchor = pointToBorderAnchor(routeDrag.toNode, { x: canvasX, y: canvasY });
+          const newEnd = anchorToPoint(routeDrag.toNode, newAnchor);
+          const currentStart = routeDrag.basePoints[0];
+          const startSide = routeDrag.sourceAnchor?.side || 'right';
+
+          const raw = [...routeDrag.basePoints.slice(0, -1), newEnd];
+          const waypoints = extractWaypoints(raw);
+          const preview =
+            waypoints.length > 0
+              ? buildManualPoints(currentStart, newEnd, waypoints, startSide, newAnchor.side)
+              : buildOrthogonalConnector(currentStart, newEnd, startSide, newAnchor.side);
+
+          setRouteDrag((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  rawPoints: raw,
+                  previewPoints: preview || [currentStart, newEnd],
+                  targetAnchor: newAnchor,
+                  moved: true,
+                }
+              : null
+          );
+          return;
+        }
+
+        if (routeDrag.dragType === 'segment') {
+          const { basePoints, segmentIndex } = routeDrag;
+          const raw = basePoints.map((p) => ({ ...p }));
+          const a = raw[segmentIndex];
+          const b = raw[segmentIndex + 1];
+          if (!a || !b) return;
+
+          if (Math.abs(a.y - b.y) < 0.01) {
+            const y = snapToGrid(a.y + (e.clientY - routeDrag.startClientY) / zoom);
+            a.y = y;
+            b.y = y;
+          } else {
+            const x = snapToGrid(a.x + (e.clientX - routeDrag.startClientX) / zoom);
+            a.x = x;
+            b.x = x;
+          }
+          const waypoints = extractWaypoints(raw);
+          const startSide = routeDrag.sourceAnchor?.side || 'right';
+          const targetSide = routeDrag.targetAnchor?.side || 'left';
+          const normalized =
+            waypoints.length > 0
+              ? buildManualPoints(raw[0], raw[raw.length - 1], waypoints, startSide, targetSide)
+              : null;
+          setRouteDrag((prev) =>
+            prev ? { ...prev, rawPoints: raw, previewPoints: normalized || raw, moved: true } : null
+          );
+          return;
+        }
       }
       if (multiDragState) {
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -171,14 +275,18 @@ export const DiagramCanvas: React.FC = () => {
             let newY = nodeStartY;
             let assignedRoleId: string | undefined = undefined;
 
-            if (isSpecial && layout.swimlanes.length > 0) {
+            const diagSwimlanes = node.diagramId
+              ? layout.swimlanes.filter((l) => l.diagramId === node.diagramId)
+              : layout.swimlanes;
+
+            if (isSpecial && diagSwimlanes.length > 0) {
               // Magnet: follow the lane under the cursor (nearest one when outside) and sit centered in it.
               const centerNodeY = nodeStartY + dy + node.height / 2;
               const targetLane =
-                layout.swimlanes.find(
+                diagSwimlanes.find(
                   (lane) => centerNodeY >= lane.y && centerNodeY <= lane.y + lane.height
                 ) ||
-                layout.swimlanes.reduce((nearest, lane) => {
+                diagSwimlanes.reduce((nearest, lane) => {
                   const distance = (l: typeof lane) =>
                     Math.min(Math.abs(centerNodeY - l.y), Math.abs(centerNodeY - (l.y + l.height)));
                   return distance(lane) < distance(nearest) ? lane : nearest;
@@ -186,7 +294,7 @@ export const DiagramCanvas: React.FC = () => {
               newY = targetLane.y + (targetLane.height - node.height) / 2;
               assignedRoleId = targetLane.roleId;
             } else {
-              const lane = layout.swimlanes.find((l) => l.roleId === node.roleId);
+              const lane = diagSwimlanes.find((l) => l.roleId === node.roleId) || layout.swimlanes.find((l) => l.roleId === node.roleId);
               if (lane) {
                 const minY = lane.y + 6;
                 const maxY = lane.y + lane.height - node.height - 6;
@@ -202,10 +310,11 @@ export const DiagramCanvas: React.FC = () => {
       } else if (isPanning) {
         const dx = e.clientX - panStartRef.current.x;
         const dy = e.clientY - panStartRef.current.y;
-        setPan(panStartRef.current.startPanX + dx, panStartRef.current.startPanY + dy);
+        const clamped = clampPan(panStartRef.current.startPanX + dx, panStartRef.current.startPanY + dy, zoom);
+        setPan(clamped.x, clamped.y);
       }
     },
-    [isPanning, multiDragState, routeDrag, zoom, setPan, layout.swimlanes]
+    [isPanning, multiDragState, routeDrag, zoom, setPan, clampPan, layout.swimlanes]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -213,8 +322,24 @@ export const DiagramCanvas: React.FC = () => {
 
     if (routeDrag) {
       if (routeDrag.moved) {
-        const waypoints = extractWaypoints(routeDrag.rawPoints);
-        setEdgeRoute(routeDrag.edge.routeKey, waypoints.length > 0 ? waypoints : null);
+        const waypoints = extractWaypoints(routeDrag.previewPoints);
+        setEdgeRoute(routeDrag.edge.routeKey, {
+          waypoints: waypoints.length > 0 ? waypoints : undefined,
+          sourceAnchor: routeDrag.sourceAnchor,
+          targetAnchor: routeDrag.targetAnchor,
+        });
+
+        if (routeDrag.edge.frameId) {
+          updateEdge(
+            routeDrag.edge.frameId,
+            routeDrag.edge.fromInstanceId,
+            routeDrag.edge.toInstanceId,
+            {
+              source_anchor: routeDrag.sourceAnchor,
+              target_anchor: routeDrag.targetAnchor,
+            }
+          );
+        }
       }
       setRouteDrag(null);
       return;
@@ -305,13 +430,23 @@ export const DiagramCanvas: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [routeEditKey]);
 
-  const handleRouteHandleDown = (e: React.MouseEvent, edge: LayoutEdge, segmentIndex: number) => {
+  const handleRouteHandleDown = (
+    e: React.MouseEvent,
+    edge: LayoutEdge,
+    handleType: EdgeHandleType,
+    segmentIndex: number
+  ) => {
     e.stopPropagation();
     e.preventDefault();
+
+    const fromNode = layout.nodes.find((n) => n.instanceId === edge.fromInstanceId);
+    const toNode = layout.nodes.find((n) => n.instanceId === edge.toInstanceId);
+    if (!fromNode || !toNode) return;
+
     let basePoints = edge.points.map((p) => ({ ...p }));
     let index = segmentIndex;
 
-    if (segmentIndex === STRAIGHT_EDGE_HANDLE) {
+    if (handleType === 'segment' && segmentIndex === STRAIGHT_EDGE_HANDLE) {
       // A straight edge has no bends yet: give it a Z shape whose middle run can be dragged.
       const [start, end] = basePoints;
       const snapToGrid = (v: number) => Math.round(v / 10) * 10;
@@ -330,12 +465,17 @@ export const DiagramCanvas: React.FC = () => {
 
     setRouteDrag({
       edge,
+      dragType: handleType,
       segmentIndex: index,
       basePoints,
       startClientX: e.clientX,
       startClientY: e.clientY,
       rawPoints: basePoints,
       previewPoints: basePoints,
+      fromNode,
+      toNode,
+      sourceAnchor: edge.sourceAnchor,
+      targetAnchor: edge.targetAnchor,
       moved: false,
     });
   };
@@ -343,15 +483,26 @@ export const DiagramCanvas: React.FC = () => {
   const routeEditEdge = routeEditKey ? layout.edges.find((ed) => ed.routeKey === routeEditKey) : null;
   const manualRouteCount = Object.keys(schema.edge_routes || {}).length;
 
-  // Handle Zoom via mouse wheel
+  // Handle Zoom via mouse wheel with viewport bounds clamping
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    const mouseX = rect ? e.clientX - rect.left : (containerRef.current?.clientWidth || 1000) / 2;
+    const mouseY = rect ? e.clientY - rect.top : (containerRef.current?.clientHeight || 800) / 2;
+
     const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    const newZoom = Math.min(
-      CANVAS_DEFAULTS.ZOOM_MAX,
-      Math.max(CANVAS_DEFAULTS.ZOOM_MIN, zoom * zoomFactor)
+    const newZoom = Number(
+      Math.min(CANVAS_DEFAULTS.ZOOM_MAX, Math.max(CANVAS_DEFAULTS.ZOOM_MIN, zoom * zoomFactor)).toFixed(2)
     );
-    setZoom(Number(newZoom.toFixed(2)));
+    if (newZoom === zoom) return;
+
+    // Zoom centered toward cursor position
+    const rawPanX = mouseX - (mouseX - panX) * (newZoom / zoom);
+    const rawPanY = mouseY - (mouseY - panY) * (newZoom / zoom);
+    const clamped = clampPan(rawPanX, rawPanY, newZoom);
+
+    setZoom(newZoom);
+    setPan(clamped.x, clamped.y);
   };
 
   // Fit to screen
@@ -374,6 +525,10 @@ export const DiagramCanvas: React.FC = () => {
   // Node Drag Start handler (supports multi-selection dragging)
   const handleStartNodeDrag = (e: React.MouseEvent, clickedNode: LayoutNode) => {
     e.stopPropagation();
+
+    if (clickedNode.diagramId && clickedNode.diagramId !== schema.active_diagram_id) {
+      setActiveDiagram(clickedNode.diagramId);
+    }
 
     const isAlreadySelected = selection.selectedInstanceIds.includes(clickedNode.instanceId);
 
@@ -411,7 +566,11 @@ export const DiagramCanvas: React.FC = () => {
   };
 
   // Node Click Selection (Ctrl for toggle, Shift for flow range selection - Requirement 2)
-  const handleNodeClick = (e: React.MouseEvent, instanceId: string, frameId: string) => {
+  const handleNodeClick = (e: React.MouseEvent, instanceId: string, frameId: string, diagramId?: string) => {
+    if (diagramId && diagramId !== schema.active_diagram_id) {
+      setActiveDiagram(diagramId);
+    }
+
     if (e.ctrlKey || e.metaKey) {
       // Toggle individual node
       toggleSelectInstance(instanceId, true);
@@ -484,13 +643,25 @@ export const DiagramCanvas: React.FC = () => {
     );
   };
 
-  const handleSaveEdge = (updates: { message_label: string; flow_type: any; color?: string }) => {
+  const handleSaveEdge = (updates: {
+    message_label: string;
+    flow_type: any;
+    color?: string;
+    source_anchor?: NodeBorderAnchor;
+    target_anchor?: NodeBorderAnchor;
+  }) => {
     if (!editingEdge) return;
     const targetFrameId = editingEdge.frameId || schema.frames[0]?.frame_id;
     if (targetFrameId) {
       updateEdge(targetFrameId, editingEdge.fromInstanceId, editingEdge.toInstanceId, updates);
-      addToast('success', 'Đã cập nhật thuộc tính luồng dữ liệu.');
     }
+    if (updates.source_anchor || updates.target_anchor) {
+      setEdgeRoute(editingEdge.routeKey, {
+        sourceAnchor: updates.source_anchor,
+        targetAnchor: updates.target_anchor,
+      });
+    }
+    addToast('success', 'Đã cập nhật thuộc tính luồng dữ liệu.');
     setEditingEdge(null);
   };
 
@@ -586,6 +757,87 @@ export const DiagramCanvas: React.FC = () => {
             </marker>
           </defs>
 
+          {/* Layer 0: Diagram Header Banners (for stacked multi-diagram support) */}
+          <g>
+            {layout.diagramHeaders.map((dh) => (
+              <g
+                key={dh.id}
+                onClick={() => {
+                  setActiveDiagram(dh.id);
+                  addToast('info', `Đã chọn ${dh.title} để chỉnh sửa.`);
+                }}
+                className="cursor-pointer group select-none"
+              >
+                {/* Banner background */}
+                <rect
+                  x={dh.x}
+                  y={dh.y}
+                  width={dh.width}
+                  height={dh.height}
+                  rx={8}
+                  fill={dh.isActive ? (isDark ? '#1E293B' : '#EFF6FF') : (isDark ? '#0F172A' : '#F8FAFC')}
+                  stroke={dh.isActive ? '#3B82F6' : (isDark ? '#334155' : '#E2E8F0')}
+                  strokeWidth={dh.isActive ? 1.75 : 1}
+                />
+                {/* Order tag badge */}
+                <rect
+                  x={dh.x + 8}
+                  y={dh.y + 7}
+                  width={24}
+                  height={22}
+                  rx={6}
+                  fill={dh.isActive ? '#2563EB' : (isDark ? '#475569' : '#94A3B8')}
+                />
+                <text
+                  x={dh.x + 20}
+                  y={dh.y + 22}
+                  textAnchor="middle"
+                  fill="#FFFFFF"
+                  fontSize={11}
+                  fontWeight={700}
+                >
+                  #{dh.order}
+                </text>
+                {/* Diagram Title */}
+                <text
+                  x={dh.x + 40}
+                  y={dh.y + 22}
+                  fill={dh.isActive ? (isDark ? '#60A5FA' : '#1D4ED8') : (isDark ? '#F1F5F9' : '#1E293B')}
+                  fontSize={13}
+                  fontWeight={700}
+                >
+                  {dh.title}
+                </text>
+                {/* Frame & Node count summary */}
+                <text
+                  x={dh.x + 48 + Math.min(dh.title.length * 8.5, 320)}
+                  y={dh.y + 22}
+                  fill={isDark ? '#94A3B8' : '#64748B'}
+                  fontSize={11}
+                  fontWeight={500}
+                >
+                  • {dh.frameCount} phân đoạn ({dh.nodeCount} nhiệm vụ)
+                </text>
+                {/* Status badge at right */}
+                {dh.isActive ? (
+                  <g transform={`translate(${Math.max(dh.x + 380, dh.x + dh.width - 150)}, ${dh.y + 8})`}>
+                    <rect x={0} y={0} width={138} height={20} rx={10} fill="#3B82F6" fillOpacity={isDark ? 0.3 : 0.12} />
+                    <text x={69} y={14} textAnchor="middle" fill="#2563EB" fontSize={10} fontWeight={700}>
+                      ● Đang chọn chỉnh sửa
+                    </text>
+                  </g>
+                ) : (
+                  <g transform={`translate(${Math.max(dh.x + 380, dh.x + dh.width - 150)}, ${dh.y + 8})`}>
+                    <rect x={0} y={0} width={138} height={20} rx={10} fill={isDark ? '#1E293B' : '#E2E8F0'} />
+                    <text x={69} y={14} textAnchor="middle" fill={isDark ? '#94A3B8' : '#64748B'} fontSize={10} fontWeight={500}>
+                      Bấm để chọn sửa
+                    </text>
+                  </g>
+                )}
+              </g>
+            ))}
+          </g>
+
           {/* Layer 1: Swimlanes */}
           <SwimlaneRenderer
             swimlanes={layout.swimlanes}
@@ -637,7 +889,7 @@ export const DiagramCanvas: React.FC = () => {
                   isDark={isDark}
                   enableDarkGlow={enableDarkGlow}
                   listingsExpanded={expandedListings.has(node.instanceId)}
-                  onSelect={(e) => handleNodeClick(e, node.instanceId, node.frameId)}
+                  onSelect={(e) => handleNodeClick(e, node.instanceId, node.frameId, node.diagramId)}
                   onHoverStart={() => handleNodeHoverStart(node.instanceId)}
                   onHoverEnd={handleNodeHoverEnd}
                   onStartDrag={handleStartNodeDrag}
@@ -658,7 +910,10 @@ export const DiagramCanvas: React.FC = () => {
           {routeEditEdge && (
             <EdgeRouteHandles
               points={routeDrag?.edge.routeKey === routeEditEdge.routeKey ? routeDrag.previewPoints : routeEditEdge.points}
-              onHandleMouseDown={(e, segmentIndex) => handleRouteHandleDown(e, routeEditEdge, segmentIndex)}
+              fromNode={layout.nodes.find((n) => n.instanceId === routeEditEdge.fromInstanceId)}
+              toNode={layout.nodes.find((n) => n.instanceId === routeEditEdge.toInstanceId)}
+              activeHandleType={routeDrag?.dragType}
+              onHandleMouseDown={(e, handleType, segmentIndex) => handleRouteHandleDown(e, routeEditEdge, handleType, segmentIndex)}
             />
           )}
         </svg>
@@ -675,7 +930,7 @@ export const DiagramCanvas: React.FC = () => {
                   isDark ? 'bg-slate-900/95 border-amber-500/40 text-slate-200' : 'bg-white/95 border-amber-400 text-gray-700'
                 }`}
               >
-                <span>Kéo các ô vàng để dời đoạn đường (bám lưới 10px)</span>
+                <span>Kéo 2 nút tròn để đổi điểm chạm trên viền Node • Kéo ô vàng để uốn đường</span>
                 <button
                   type="button"
                   className="font-semibold text-amber-500 hover:text-amber-400 disabled:opacity-40 disabled:cursor-not-allowed"

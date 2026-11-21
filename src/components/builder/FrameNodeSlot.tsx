@@ -52,7 +52,8 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
   const kind = node.node_kind || template?.node_kind;
   const kindMeta = isSpecialKind(kind) ? NODE_KIND_META[kind] : null;
   const roleColor = role?.color || kindMeta?.color || '#3B82F6';
-  const displayTitle = node.custom_label || node.title;
+  const nodeTitle = node.title || template?.title || 'Chưa đặt tên';
+  const nodeDescription = node.custom_label;
   const listings = node.listings || [];
 
   const handleSaveLabel = () => {
@@ -130,48 +131,39 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
             </div>
           ) : (
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-gray-800 truncate" title={displayTitle}>
-                {displayTitle}
+              {/* Main Heading: Tên Node (Title) giống như mục Kho Node */}
+              <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate" title={nodeTitle}>
+                {nodeTitle}
               </p>
-              {kindMeta && (
-                <p className="text-[10px] truncate" style={{ color: kindMeta.color }}>
-                  {kindMeta.tag}
-                  {role ? ` • Làn: ${role.name}` : ''}
+              {/* Mô tả / Ghi chú (Custom Label) hiển thị rõ bên dưới nếu có */}
+              {nodeDescription && (
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate mt-0.5" title={nodeDescription}>
+                  {nodeDescription}
                 </p>
               )}
-              {node.custom_label && (
-                <p className="text-[10px] text-gray-400 truncate italic">
-                  Gốc: {node.title}
+              {kindMeta && (
+                <p className="text-[10px] truncate mt-0.5" style={{ color: kindMeta.color }}>
+                  {kindMeta.tag}
+                  {role ? ` • Làn: ${role.name}` : ''}
                 </p>
               )}
             </div>
           )}
         </div>
 
-        {/* Actions */}
+        {/* Actions: Reorder up/down, edit description, delete */}
         {!editingLabel && (
-          <div className="flex items-center gap-0.5 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingLabel(true);
-                setLabelText(node.custom_label || '');
-              }}
-              title="Đổi tên/Ghi chú riêng cho bản sao này"
-              className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-gray-100 transition-colors"
-            >
-              <Edit3 size={11} />
-            </button>
+          <div className="flex items-center gap-1 shrink-0">
             <button
               disabled={index === 0}
               onClick={(e) => {
                 e.stopPropagation();
                 onMoveUp();
               }}
-              title="Di chuyển lên trước"
-              className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-20 transition-colors"
+              title="Di chuyển node lên trước (đổi thứ tự)"
+              className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 disabled:opacity-20 transition-colors"
             >
-              <ChevronUp size={12} />
+              <ChevronUp size={13} />
             </button>
             <button
               disabled={index === total - 1}
@@ -179,10 +171,21 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
                 e.stopPropagation();
                 onMoveDown();
               }}
-              title="Di chuyển xuống sau"
-              className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-20 transition-colors"
+              title="Di chuyển node xuống sau (đổi thứ tự)"
+              className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 disabled:opacity-20 transition-colors"
             >
-              <ChevronDown size={12} />
+              <ChevronDown size={13} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingLabel(true);
+                setLabelText(node.custom_label || '');
+              }}
+              title="Thêm hoặc sửa mô tả / ghi chú cho nhiệm vụ này"
+              className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <Edit3 size={12} />
             </button>
             <button
               onClick={(e) => {

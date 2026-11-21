@@ -16,6 +16,14 @@ import {
   Sparkles,
   Undo2,
   Redo2,
+  Layers,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  Trash2,
+  Edit3,
+  Check,
+  X,
 } from 'lucide-react';
 import { CANVAS_DEFAULTS } from '../../utils/constants';
 
@@ -49,18 +57,41 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
     redo,
     canUndo,
     canRedo,
+    addDiagram,
+    removeDiagram,
+    moveDiagram,
+    updateDiagramTitle,
+    setActiveDiagram,
   } = useProjectStore();
 
   const { keybindings } = useSettingsStore();
 
   const [showSpacingPopover, setShowSpacingPopover] = useState(false);
+  const [showDiagramPopover, setShowDiagramPopover] = useState(false);
+  const [editingDiagId, setEditingDiagId] = useState<string | null>(null);
+  const [diagTitleInput, setDiagTitleInput] = useState('');
 
   const selectedCount = selection.selectedInstanceIds.length;
   const currentSpacing = schema.settings.horizontal_spacing !== undefined ? schema.settings.horizontal_spacing : 40;
 
+  // Resolve diagram list
+  const diagrams =
+    schema.diagrams && schema.diagrams.length > 0
+      ? [...schema.diagrams].sort((a, b) => a.order - b.order)
+      : [
+          {
+            id: schema.active_diagram_id || 'diag_1',
+            title: schema.metadata?.project_name || 'Sơ đồ 1',
+            order: 1,
+            frames: schema.frames || [],
+          },
+        ];
+  const activeId = schema.active_diagram_id || diagrams[0].id;
+  const activeDiagram = diagrams.find((d) => d.id === activeId) || diagrams[0];
+
   return (
     <div className="h-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-3 flex items-center justify-between gap-2 shrink-0 z-20 select-none shadow-xs text-xs text-gray-700 dark:text-slate-200">
-      {/* Left: Mode Selection (Select / Pan) + Undo / Redo */}
+      {/* Left: Undo / Redo + Mode Selector + Multi-selection */}
       <div className="flex items-center gap-1.5">
         {/* Undo & Redo (Requirement 1) */}
         <div className="flex items-center bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
@@ -154,11 +185,220 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         )}
       </div>
 
-      {/* Middle: Horizontal Spacing & Auto-align */}
-      <div className="flex items-center gap-1.5">
+      {/* Middle: Diagram Management (Multi-diagram stacked below) & Spacing */}
+      <div className="flex items-center gap-2">
+        {/* Diagram Selector & Management Popover */}
         <div className="relative">
           <button
-            onClick={() => setShowSpacingPopover(!showSpacingPopover)}
+            onClick={() => {
+              setShowDiagramPopover(!showDiagramPopover);
+              setShowSpacingPopover(false);
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+              showDiagramPopover
+                ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
+            }`}
+            title="Quản lý và sắp xếp các sơ đồ trong dự án (xếp tầng trên dưới)"
+          >
+            <Layers size={13} className="text-blue-600 dark:text-blue-400" />
+            <span className="font-semibold max-w-[130px] truncate">{activeDiagram?.title || 'Sơ đồ 1'}</span>
+            <span className="text-[10px] font-mono text-gray-400">
+              (#{activeDiagram?.order || 1}/{diagrams.length})
+            </span>
+            <ChevronDown size={11} className="text-gray-400" />
+          </button>
+
+          {showDiagramPopover && (
+            <div className="absolute top-full left-0 mt-1.5 w-84 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-800 p-3 z-30">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-slate-800">
+                <div>
+                  <h4 className="font-bold text-gray-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+                    <Layers size={13} className="text-blue-600" />
+                    Quản lý Sơ đồ ({diagrams.length})
+                  </h4>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Sơ đồ xếp theo thứ tự từ trên xuống dưới trên Canvas
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    addDiagram();
+                    addToast('success', 'Đã thêm sơ đồ mới nằm ở dưới tiếp theo!');
+                  }}
+                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md text-[11px] font-medium transition-colors shadow-xs"
+                  title="Thêm một sơ đồ mới nằm ở dưới tiếp theo"
+                >
+                  <Plus size={12} />
+                  <span>+ Thêm sơ đồ</span>
+                </button>
+              </div>
+
+              {/* Diagram List */}
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
+                {diagrams.map((diag, idx) => {
+                  const isActive = diag.id === activeId;
+                  const totalNodes = diag.frames.reduce((sum, f) => sum + f.nodes.length, 0);
+
+                  return (
+                    <div
+                      key={diag.id}
+                      onClick={() => setActiveDiagram(diag.id)}
+                      className={`group p-2 rounded-lg border transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-400 dark:border-blue-600 shadow-xs'
+                          : 'bg-gray-50/50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                              isActive
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                            }`}
+                          >
+                            #{diag.order}
+                          </span>
+
+                          {editingDiagId === diag.id ? (
+                            <div
+                              className="flex items-center gap-1 flex-1 min-w-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="text"
+                                autoFocus
+                                value={diagTitleInput}
+                                onChange={(e) => setDiagTitleInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    updateDiagramTitle(diag.id, diagTitleInput);
+                                    setEditingDiagId(null);
+                                  }
+                                  if (e.key === 'Escape') setEditingDiagId(null);
+                                }}
+                                className="w-full text-xs border border-blue-400 rounded px-1.5 py-0.5 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                              />
+                              <button
+                                onClick={() => {
+                                  updateDiagramTitle(diag.id, diagTitleInput);
+                                  setEditingDiagId(null);
+                                }}
+                                className="text-green-600 hover:text-green-700 p-0.5"
+                              >
+                                <Check size={12} />
+                              </button>
+                              <button
+                                onClick={() => setEditingDiagId(null)}
+                                className="text-gray-400 hover:text-gray-600 p-0.5"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className="font-semibold text-xs text-gray-800 dark:text-slate-100 truncate"
+                                  title={diag.title}
+                                >
+                                  {diag.title}
+                                </span>
+                                {isActive && (
+                                  <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/60 px-1 py-0.2 rounded shrink-0">
+                                    Đang sửa
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-gray-500 dark:text-slate-400">
+                                {diag.frames.length} phân đoạn • {totalNodes} nhiệm vụ
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions: Reorder Up/Down, Rename, Delete */}
+                        {editingDiagId !== diag.id && (
+                          <div
+                            className="flex items-center gap-0.5 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              disabled={idx === 0}
+                              onClick={() => {
+                                moveDiagram(diag.id, 'up');
+                                addToast('info', `Đã chuyển "${diag.title}" lên trên`);
+                              }}
+                              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-gray-200 dark:hover:bg-slate-700 rounded disabled:opacity-20 transition-colors"
+                              title="Chuyển sơ đồ lên trên"
+                            >
+                              <ChevronUp size={13} />
+                            </button>
+                            <button
+                              disabled={idx === diagrams.length - 1}
+                              onClick={() => {
+                                moveDiagram(diag.id, 'down');
+                                addToast('info', `Đã chuyển "${diag.title}" xuống dưới`);
+                              }}
+                              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-gray-200 dark:hover:bg-slate-700 rounded disabled:opacity-20 transition-colors"
+                              title="Chuyển sơ đồ xuống dưới"
+                            >
+                              <ChevronDown size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingDiagId(diag.id);
+                                setDiagTitleInput(diag.title);
+                              }}
+                              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-gray-200 dark:hover:bg-slate-700 rounded transition-colors"
+                              title="Đổi tên sơ đồ"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            {diagrams.length > 1 && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Bạn có chắc muốn xóa "${diag.title}"?`)) {
+                                    removeDiagram(diag.id);
+                                    addToast('info', `Đã xóa "${diag.title}"`);
+                                  }
+                                }}
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
+                                title="Xóa sơ đồ này"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center text-[11px]">
+                <span className="text-gray-400">Click sơ đồ để chọn chỉnh sửa</span>
+                <button
+                  onClick={() => setShowDiagramPopover(false)}
+                  className="text-gray-500 hover:text-gray-800 dark:hover:text-slate-300 font-medium"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Spacing Popover */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowSpacingPopover(!showSpacingPopover);
+              setShowDiagramPopover(false);
+            }}
             className={`flex items-center gap-1 px-2 py-1 rounded-md border text-xs font-medium transition-colors ${
               showSpacingPopover
                 ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
@@ -196,7 +436,9 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                 <button
                   onClick={() => setHorizontalSpacing(24)}
                   className={`py-1 text-[10px] rounded border ${
-                    currentSpacing === 24 ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-400 font-bold text-blue-700 dark:text-blue-300' : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
+                    currentSpacing === 24
+                      ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-400 font-bold text-blue-700 dark:text-blue-300'
+                      : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
                 >
                   Gọn (24px)
@@ -204,7 +446,9 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                 <button
                   onClick={() => setHorizontalSpacing(40)}
                   className={`py-1 text-[10px] rounded border ${
-                    currentSpacing === 40 ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-400 font-bold text-blue-700 dark:text-blue-300' : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
+                    currentSpacing === 40
+                      ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-400 font-bold text-blue-700 dark:text-blue-300'
+                      : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
                 >
                   Chuẩn (40px)
@@ -212,7 +456,9 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                 <button
                   onClick={() => setHorizontalSpacing(72)}
                   className={`py-1 text-[10px] rounded border ${
-                    currentSpacing === 72 ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-400 font-bold text-blue-700 dark:text-blue-300' : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
+                    currentSpacing === 72
+                      ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-400 font-bold text-blue-700 dark:text-blue-300'
+                      : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
                 >
                   Rộng (72px)

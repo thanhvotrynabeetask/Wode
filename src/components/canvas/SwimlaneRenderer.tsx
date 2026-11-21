@@ -79,7 +79,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({ swimlanes, i
         const firstLineY = cardCenterY - totalTextHeight / 2 + lineHeight / 2;
 
         return (
-          <g key={lane.roleId}>
+          <g key={lane.id || `${lane.diagramId || 'diag'}_${lane.roleId}_${idx}`}>
             {/* Lane background row */}
             <rect
               x={0}

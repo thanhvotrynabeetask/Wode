@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { ProjectSchema, Role, NodeTemplate, Frame, NodeInstance, EdgeConfig } from '../types/schema';
+import { ProjectSchema, Role, NodeTemplate, Frame, NodeInstance, EdgeConfig, NodeBorderAnchor, EdgeRoute, DiagramSection } from '../types/schema';
 
-import { generateRoleId, generateNodeId, generateFrameId, generateInstanceId } from '../utils/idGenerator';
+import { generateRoleId, generateNodeId, generateFrameId, generateInstanceId, generateDiagramId } from '../utils/idGenerator';
 import { formatISOTimestamp } from '../utils/dateFormat';
 import { APP_VERSION } from '../utils/constants';
 
@@ -63,27 +63,90 @@ interface ProjectState {
   updateEdge: (frameId: string, fromInstance: string, toInstance: string, updates: Partial<EdgeConfig>) => void;
   updateEdgeByIndex: (frameId: string, edgeIndex: number, updates: Partial<EdgeConfig>) => void;
   setNextFrameTarget: (frameId: string, targetFrameId: string | null) => void;
-  setEdgeRoute: (routeKey: string, waypoints: { x: number; y: number }[] | null) => void;
+  setEdgeRoute: (
+    routeKey: string,
+    route:
+      | {
+          waypoints?: { x: number; y: number }[];
+          sourceAnchor?: NodeBorderAnchor;
+          targetAnchor?: NodeBorderAnchor;
+        }
+      | { x: number; y: number }[]
+      | null
+  ) => void;
   clearAllEdgeRoutes: () => void;
+
+  // Multi-Diagram support
+  addDiagram: (title?: string) => string;
+  removeDiagram: (diagramId: string) => void;
+  reorderDiagrams: (orderedIds: string[]) => void;
+  moveDiagram: (diagramId: string, direction: 'up' | 'down') => void;
+  updateDiagramTitle: (diagramId: string, title: string) => void;
+  setActiveDiagram: (diagramId: string) => void;
 
   // Computed
   getUsageCount: (baseId: string) => number;
 }
 
-const createEmptySchema = (): ProjectSchema => ({
-  version: APP_VERSION,
-  metadata: {
-    project_name: 'Untitled Project',
-    updated_at: formatISOTimestamp(),
-  },
-  settings: {
-    workspace_path: '',
-    horizontal_spacing: 40,
-  },
-  roles: [],
-  node_palette: [],
-  frames: [],
-});
+const createEmptySchema = (): ProjectSchema => {
+  const initialFrame: Frame = {
+    frame_id: 'frame_1',
+    title: 'Giai đoạn 1',
+    order: 1,
+    nodes: [],
+    edges_config: [],
+  };
+  const initialDiagram: DiagramSection = {
+    id: 'diag_1',
+    title: 'Sơ đồ 1',
+    order: 1,
+    frames: [initialFrame],
+    edge_routes: {},
+  };
+  return {
+    version: APP_VERSION,
+    metadata: {
+      project_name: 'Untitled Project',
+      updated_at: formatISOTimestamp(),
+    },
+    settings: {
+      workspace_path: '',
+      horizontal_spacing: 40,
+    },
+    roles: [],
+    node_palette: [],
+    frames: [initialFrame],
+    diagrams: [initialDiagram],
+    active_diagram_id: 'diag_1',
+  };
+};
+
+export function syncActiveDiagramToDiagrams(schema: ProjectSchema): DiagramSection[] {
+  const diagrams =
+    schema.diagrams && schema.diagrams.length > 0
+      ? [...schema.diagrams]
+      : [
+          {
+            id: 'diag_1',
+            title: schema.metadata?.project_name || 'Sơ đồ 1',
+            order: 1,
+            frames: schema.frames || [],
+            edge_routes: schema.edge_routes,
+          },
+        ];
+
+  const activeId = schema.active_diagram_id || diagrams[0].id;
+  return diagrams.map((diag) => {
+    if (diag.id === activeId) {
+      return {
+        ...diag,
+        frames: schema.frames,
+        edge_routes: schema.edge_routes,
+      };
+    }
+    return diag;
+  });
+}
 
 const pushHistory = (past: ProjectSchema[], current: ProjectSchema): ProjectSchema[] => {
   const max = 40;
@@ -138,7 +201,35 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       isDirty: true,
     })),
 
-  loadSchema: (schema) => set({ schema, past: [], future: [], isDirty: false }),
+  loadSchema: (schema) => {
+    let diagrams = schema.diagrams;
+    if (!diagrams || diagrams.length === 0) {
+      diagrams = [
+        {
+          id: 'diag_1',
+          title: schema.metadata?.project_name || 'Sơ đồ 1',
+          order: 1,
+          frames: schema.frames || [],
+          edge_routes: schema.edge_routes,
+        },
+      ];
+    }
+    const activeId = schema.active_diagram_id || diagrams[0].id;
+    const activeDiagram = diagrams.find((d) => d.id === activeId) || diagrams[0];
+
+    set({
+      schema: {
+        ...schema,
+        diagrams,
+        active_diagram_id: activeDiagram.id,
+        frames: activeDiagram.frames,
+        edge_routes: activeDiagram.edge_routes || schema.edge_routes,
+      },
+      past: [],
+      future: [],
+      isDirty: false,
+    });
+  },
 
   newProject: () => set({ schema: createEmptySchema(), past: [], future: [], isDirty: false, currentFilePath: null }),
 
@@ -343,6 +434,20 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           if (f.frame_id !== frameId) return f;
           const nodeMap = new Map(f.nodes.map((n) => [n.instance_id, n]));
           const reordered = orderedInstanceIds.map((id) => nodeMap.get(id)).filter(Boolean) as NodeInstance[];
+          // When reordering in sidebar, sync canvas horizontal order as well
+          const sortedX = f.nodes
+            .map((n) => n.custom_x)
+            .filter((x): x is number => x !== undefined)
+            .sort((a, b) => a - b);
+          if (sortedX.length === reordered.length && sortedX.length > 0) {
+            reordered.forEach((node, idx) => {
+              node.custom_x = sortedX[idx];
+            });
+          } else {
+            reordered.forEach((node) => {
+              delete node.custom_x;
+            });
+          }
           return { ...f, nodes: reordered };
         }),
       },
@@ -547,11 +652,44 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       isDirty: true,
     })),
 
-  setEdgeRoute: (routeKey, waypoints) =>
+  setEdgeRoute: (routeKey, routeOrWaypoints) =>
     set((s) => {
       const routes = { ...(s.schema.edge_routes || {}) };
-      if (waypoints && waypoints.length > 0) routes[routeKey] = { waypoints };
-      else delete routes[routeKey];
+      if (!routeOrWaypoints) {
+        delete routes[routeKey];
+      } else if (Array.isArray(routeOrWaypoints)) {
+        if (routeOrWaypoints.length > 0) {
+          routes[routeKey] = {
+            ...(routes[routeKey] || {}),
+            waypoints: routeOrWaypoints,
+          };
+        } else {
+          const existing = routes[routeKey];
+          if (existing?.sourceAnchor || existing?.targetAnchor) {
+            delete existing.waypoints;
+            routes[routeKey] = { ...existing };
+          } else {
+            delete routes[routeKey];
+          }
+        }
+      } else {
+        const { waypoints, sourceAnchor, targetAnchor } = routeOrWaypoints;
+        const existing = routes[routeKey] || {};
+        const updated: EdgeRoute = {
+          ...existing,
+          ...(waypoints !== undefined ? { waypoints } : {}),
+          ...(sourceAnchor !== undefined ? { sourceAnchor } : {}),
+          ...(targetAnchor !== undefined ? { targetAnchor } : {}),
+        };
+        if (updated.waypoints && updated.waypoints.length === 0) {
+          delete updated.waypoints;
+        }
+        if (updated.waypoints || updated.sourceAnchor || updated.targetAnchor) {
+          routes[routeKey] = updated;
+        } else {
+          delete routes[routeKey];
+        }
+      }
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
@@ -602,6 +740,146 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       },
       isDirty: true,
     })),
+
+  // Multi-Diagram support
+  addDiagram: (title) => {
+    const s = get();
+    const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
+    const newId = generateDiagramId();
+    const newOrder = currentDiagrams.length + 1;
+    const initialFrame: Frame = {
+      frame_id: generateFrameId(),
+      title: 'Giai đoạn 1',
+      order: 1,
+      nodes: [],
+      edges_config: [],
+    };
+    const newDiagram: DiagramSection = {
+      id: newId,
+      title: title?.trim() || `Sơ đồ ${newOrder}`,
+      order: newOrder,
+      frames: [initialFrame],
+      edge_routes: {},
+    };
+    const updatedDiagrams = [...currentDiagrams, newDiagram];
+    set({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: {
+        ...s.schema,
+        diagrams: updatedDiagrams,
+        active_diagram_id: newId,
+        frames: newDiagram.frames,
+        edge_routes: {},
+      },
+      isDirty: true,
+    });
+    return newId;
+  },
+
+  removeDiagram: (diagramId) => {
+    const s = get();
+    const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
+    if (currentDiagrams.length <= 1) return;
+
+    const remaining = currentDiagrams
+      .filter((d) => d.id !== diagramId)
+      .map((d, idx) => ({ ...d, order: idx + 1 }));
+
+    const nextActive = remaining[0];
+    set({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: {
+        ...s.schema,
+        diagrams: remaining,
+        active_diagram_id: nextActive.id,
+        frames: nextActive.frames,
+        edge_routes: nextActive.edge_routes || {},
+      },
+      isDirty: true,
+    });
+  },
+
+  reorderDiagrams: (orderedIds) => {
+    const s = get();
+    const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
+    const diagMap = new Map(currentDiagrams.map((d) => [d.id, d]));
+    const reordered = orderedIds
+      .map((id) => diagMap.get(id))
+      .filter(Boolean) as DiagramSection[];
+    const updated = reordered.map((d, idx) => ({ ...d, order: idx + 1 }));
+
+    set({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: {
+        ...s.schema,
+        diagrams: updated,
+      },
+      isDirty: true,
+    });
+  },
+
+  moveDiagram: (diagramId, direction) => {
+    const s = get();
+    const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
+    const index = currentDiagrams.findIndex((d) => d.id === diagramId);
+    if (index === -1) return;
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= currentDiagrams.length) return;
+
+    const reordered = [...currentDiagrams];
+    const temp = reordered[index];
+    reordered[index] = reordered[targetIndex];
+    reordered[targetIndex] = temp;
+
+    const updated = reordered.map((d, idx) => ({ ...d, order: idx + 1 }));
+    set({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: {
+        ...s.schema,
+        diagrams: updated,
+      },
+      isDirty: true,
+    });
+  },
+
+  updateDiagramTitle: (diagramId, title) => {
+    const s = get();
+    const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
+    const updated = currentDiagrams.map((d) =>
+      d.id === diagramId ? { ...d, title: title.trim() || d.title } : d
+    );
+    set({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: {
+        ...s.schema,
+        diagrams: updated,
+      },
+      isDirty: true,
+    });
+  },
+
+  setActiveDiagram: (diagramId) => {
+    const s = get();
+    const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
+    const target = currentDiagrams.find((d) => d.id === diagramId);
+    if (!target) return;
+
+    set({
+      schema: {
+        ...s.schema,
+        diagrams: currentDiagrams,
+        active_diagram_id: diagramId,
+        frames: target.frames,
+        edge_routes: target.edge_routes || {},
+      },
+    });
+  },
 
   getUsageCount: (baseId) => {
     const { schema } = get();

@@ -35,6 +35,8 @@ export const SettingsDialog: React.FC = () => {
   const { isSettingsOpen, closeSettings, addToast } = useUIStore();
   const {
     workspacePath,
+    setWorkspacePath,
+    setWorkspaceHandle,
     clearWorkspace,
     theme,
     setTheme,
@@ -54,6 +56,34 @@ export const SettingsDialog: React.FC = () => {
   const handleDownloadLogs = () => {
     FileSystemService.downloadFile('app_execution.log', logs, 'text/plain');
     addToast('success', 'Đã tải file app_execution.log');
+  };
+
+  const handlePickWorkspace = async () => {
+    try {
+      if ('showDirectoryPicker' in window) {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        setWorkspaceHandle(handle);
+        setWorkspacePath(handle.name);
+        FileSystemService.setWorkspaceHandle(handle);
+        addToast('success', `Đã chọn Workspace: ${handle.name}`);
+      } else {
+        const path = prompt('Nhập tên hoặc đường dẫn thư mục Workspace:');
+        if (path) {
+          setWorkspacePath(path);
+          addToast('success', `Đã chọn Workspace: ${path}`);
+        }
+      }
+    } catch (err: unknown) {
+      if ((err as Error).name !== 'AbortError') {
+        addToast('error', 'Không thể truy cập thư mục: ' + (err as Error).message);
+      }
+    }
+  };
+
+  const handleClearWorkspace = () => {
+    clearWorkspace();
+    FileSystemService.setWorkspaceHandle(null);
+    addToast('info', 'Đã xóa thiết lập Workspace. Khi lưu sẽ hỏi vị trí lưu file.');
   };
 
   // Keyboard recorder for custom keybinding
@@ -272,24 +302,35 @@ export const SettingsDialog: React.FC = () => {
         {activeTab === 'general' && (
           <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Thư mục Workspace (Local-first)
+              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                Thư mục Workspace (Tùy chọn)
               </label>
               <div className="flex items-center gap-2">
-                <span className="flex-1 text-xs font-mono text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 truncate">
-                  {workspacePath ?? 'Chưa chọn'}
+                <span className="flex-1 text-xs font-mono text-gray-700 dark:text-slate-300 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 truncate">
+                  {workspacePath ? `📁 ${workspacePath}` : 'Chưa thiết lập (Mặc định tải về / chọn nơi lưu)'}
                 </span>
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    clearWorkspace();
-                    closeSettings();
-                  }}
+                  icon={<FolderOpen size={14} />}
+                  onClick={handlePickWorkspace}
                 >
-                  Đổi thư mục
+                  {workspacePath ? 'Đổi thư mục' : 'Chọn thư mục'}
                 </Button>
+                {workspacePath && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700"
+                    onClick={handleClearWorkspace}
+                  >
+                    Bỏ chọn
+                  </Button>
+                )}
               </div>
+              <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                Ứng dụng có thể hoạt động ngay mà không cần Workspace. Khi chọn một thư mục, file sơ đồ và log sẽ được lưu trực tiếp vào thư mục đó.
+              </p>
             </div>
 
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-start gap-2.5">

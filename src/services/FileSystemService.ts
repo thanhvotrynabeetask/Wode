@@ -51,12 +51,12 @@ export class FileSystemService {
   }
 
   /**
-   * Save project schema to .json file inside Workspace directory
+   * Save project schema to .json file inside Workspace directory or prompt Save As
    */
   public static async saveProject(
     schema: ProjectSchema,
     fileName?: string
-  ): Promise<{ success: boolean; fileName: string }> {
+  ): Promise<{ success: boolean; fileName: string; canceled?: boolean }> {
     const rawName = fileName || `${schema.metadata.project_name || 'workflow'}.json`;
     const safeName = rawName.endsWith('.json') ? rawName : `${rawName}.json`;
     const jsonContent = JSON.stringify(schema, null, 2);
@@ -73,6 +73,33 @@ export class FileSystemService {
           `[${new Date().toISOString()}] [INFO] [FileSystemService] - Đã lưu dự án thành công: ${safeName}`
         );
         return { success: true, fileName: safeName };
+      } else if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: safeName,
+            types: [
+              {
+                description: 'JSON Workflow File (*.json)',
+                accept: { 'application/json': ['.json'] },
+              },
+            ],
+          });
+          const writable = await fileHandle.createWritable();
+          await writable.write(jsonContent);
+          await writable.close();
+
+          LoggerService.info('FileSystemService', `Đã lưu dự án thành công: ${fileHandle.name}`);
+          return { success: true, fileName: fileHandle.name };
+        } catch (err: unknown) {
+          if ((err as Error).name === 'AbortError') {
+            LoggerService.info('FileSystemService', 'Người dùng đã hủy lưu file.');
+            return { success: false, fileName: safeName, canceled: true };
+          }
+          // Fallback to download on other errors
+          this.downloadFile(safeName, jsonContent, 'application/json');
+          LoggerService.info('FileSystemService', `Đã xuất tải về file dự án: ${safeName}`);
+          return { success: true, fileName: safeName };
+        }
       } else {
         // Fallback: browser download
         this.downloadFile(safeName, jsonContent, 'application/json');

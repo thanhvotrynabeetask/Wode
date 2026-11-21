@@ -3,6 +3,13 @@
 export type CornerSymbol = 'user-action' | 'bot' | 'check' | 'timer' | 'none';
 export type FlowType = 'solid' | 'dashed' | 'dotted';
 export type NodeKind = 'standard' | 'storage' | 'mediator'; // 'storage' & 'mediator' can freely magnet across swimlanes
+export type BorderSide = 'top' | 'right' | 'bottom' | 'left';
+
+export interface NodeBorderAnchor {
+  side: BorderSide;
+  /** Normalized ratio along the border edge (0.0 to 1.0). E.g., 0.5 is center. */
+  ratio: number;
+}
 
 /** Listing item types for node details */
 export type ListingItemType = 'skill' | 'ai_model' | 'ai_agent' | 'connector' | 'tool' | 'custom';
@@ -67,11 +74,15 @@ export interface EdgeConfig {
   flow_type: FlowType;
   color?: string; // Custom independent color for this message flow
   curvature_offset?: number; // Independent curvature variation to avoid collision
+  source_anchor?: NodeBorderAnchor;
+  target_anchor?: NodeBorderAnchor;
 }
 
 export interface EdgeRoute {
   /** Interior bend points of a hand-drawn orthogonal route (absolute canvas coordinates). */
-  waypoints: { x: number; y: number }[];
+  waypoints?: { x: number; y: number }[];
+  sourceAnchor?: NodeBorderAnchor;
+  targetAnchor?: NodeBorderAnchor;
 }
 
 export interface Frame {
@@ -93,6 +104,15 @@ export interface ProjectSettings {
   horizontal_spacing?: number; // Configurable node horizontal gap (default 40px)
 }
 
+export interface DiagramSection {
+  id: string;
+  title: string;
+  order: number;
+  roles?: Role[];
+  frames: Frame[];
+  edge_routes?: Record<string, EdgeRoute>;
+}
+
 export interface ProjectSchema {
   version: string;
   metadata: ProjectMetadata;
@@ -102,4 +122,7 @@ export interface ProjectSchema {
   frames: Frame[];
   /** Manual route overrides keyed by `${fromInstanceId}>${toInstanceId}`. Absent = automatic routing. */
   edge_routes?: Record<string, EdgeRoute>;
+  /** Multi-diagram support: list of diagrams stacked vertically in project */
+  diagrams?: DiagramSection[];
+  active_diagram_id?: string;
 }

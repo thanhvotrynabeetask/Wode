@@ -1,23 +1,33 @@
 import React, { useRef, useState } from 'react';
-import { Save, Settings, FolderOpen, FilePlus, Download, Upload, ChevronDown } from 'lucide-react';
-import { useProjectStore } from '../../store/useProjectStore';
+import { Save, Settings, FolderOpen, FilePlus, Download, Upload, ChevronDown, LogOut } from 'lucide-react';
+import { useProjectStore, syncActiveDiagramToDiagrams } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
+import { useSettingsStore } from '../../store/useSettingsStore';
 import { Button } from '../common/Button';
+import { ExitFlowDialog } from '../common/ExitFlowDialog';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { FileSystemService } from '../../services/FileSystemService';
 import { ExportService, ExportOptions } from '../../services/ExportService';
 import { ImportService } from '../../services/ImportService';
 import { APP_NAME } from '../../utils/constants';
 
+type PendingAction = 'new' | 'exit' | 'open';
+
 export const Header: React.FC = () => {
   const { schema, isDirty, setProjectName, loadSchema, newProject, markClean } = useProjectStore();
   const { openSettings, addToast } = useUIStore();
+  const workspacePath = useSettingsStore((s) => s.workspacePath);
+
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(schema.metadata.project_name);
-  const [showNewConfirm, setShowNewConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Dialog states for exit / reset flow
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [showCleanExitConfirm, setShowCleanExitConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const exportButtonRef = useRef<HTMLDivElement>(null);
@@ -31,7 +41,14 @@ export const Header: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await FileSystemService.saveProject(schema);
+      const fullSchema = {
+        ...schema,
+        diagrams: syncActiveDiagramToDiagrams(schema),
+      };
+      const res = await FileSystemService.saveProject(fullSchema);
+      if (res && res.canceled) {
+        return;
+      }
       markClean();
       addToast('success', `Đã lưu dự án: ${res.fileName}`);
     } catch (err) {
@@ -46,7 +63,11 @@ export const Header: React.FC = () => {
     setIsExporting(true);
     try {
       const options: ExportOptions = { darkMode };
-      const fileName = await ExportService.exportHTML(schema, options);
+      const fullSchema = {
+        ...schema,
+        diagrams: syncActiveDiagramToDiagrams(schema),
+      };
+      const fileName = await ExportService.exportHTML(fullSchema, options);
       addToast('success', `Đã xuất HTML ${darkMode ? '(Dark Mode)' : '(Light Mode)'}: ${fileName}`);
     } catch (err) {
       addToast('error', `Lỗi khi xuất HTML: ${(err as Error).message}`);
@@ -55,10 +76,7 @@ export const Header: React.FC = () => {
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const executeLoadFile = async (file: File) => {
     try {
       const loaded = await ImportService.parseFile(file);
       loadSchema(loaded);
@@ -66,18 +84,61 @@ export const Header: React.FC = () => {
       addToast('success', `Đã mở dự án từ ${file.name}`);
     } catch (err) {
       addToast('error', `Không thể mở file: ${(err as Error).message}`);
-    } finally {
-      e.target.value = '';
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (isDirty) {
+      setPendingFile(file);
+      setPendingAction('open');
+    } else {
+      await executeLoadFile(file);
+    }
+    e.target.value = '';
   };
 
   const handleNewProjectClick = () => {
     if (isDirty) {
-      setShowNewConfirm(true);
+      setPendingAction('new');
     } else {
       newProject();
       setNameInput('Untitled Project');
       addToast('info', 'Đã tạo dự án mới');
+    }
+  };
+
+  const handleExitClick = () => {
+    if (isDirty) {
+      setPendingAction('exit');
+    } else {
+      const hasContent = schema.frames.length > 0 || schema.roles.length > 0;
+      if (hasContent) {
+        setShowCleanExitConfirm(true);
+      } else {
+        addToast('info', 'Sơ đồ đang ở trạng thái trống.');
+      }
+    }
+  };
+
+  const handleConfirmPendingAction = async () => {
+    const action = pendingAction;
+    const file = pendingFile;
+    setPendingAction(null);
+    setPendingFile(null);
+
+    if (action === 'new') {
+      newProject();
+      setNameInput('Untitled Project');
+      addToast('info', 'Đã tạo sơ đồ mới.');
+    } else if (action === 'exit') {
+      newProject();
+      setNameInput('Untitled Project');
+      addToast('info', 'Đã đóng phiên làm việc.');
+    } else if (action === 'open' && file) {
+      await executeLoadFile(file);
     }
   };
 
@@ -144,7 +205,7 @@ export const Header: React.FC = () => {
           >
             {schema.metadata.project_name}
             {isDirty && (
-              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Chưa lưu" />
+              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Chưa lưu thay đổi" />
             )}
           </span>
         )}
@@ -167,7 +228,7 @@ export const Header: React.FC = () => {
           size="sm"
           icon={<FolderOpen size={15} />}
           onClick={() => fileInputRef.current?.click()}
-          title="Mở file .json hoặc .html từ máy"
+          title="Mở file .json hoặc .html từ máy tính"
         >
           Mở
         </Button>
@@ -178,12 +239,12 @@ export const Header: React.FC = () => {
           icon={<Save size={15} />}
           loading={isSaving}
           onClick={handleSave}
-          title="Lưu file vào Workspace"
+          title={workspacePath ? `Lưu vào Workspace: ${workspacePath}` : 'Lưu file sơ đồ (.json)'}
         >
           Lưu
         </Button>
 
-        <div className="w-px h-5 bg-gray-200 mx-1" />
+        <div className="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-1" />
 
         <Button
           variant="ghost"
@@ -232,32 +293,79 @@ export const Header: React.FC = () => {
           )}
         </div>
 
-        <div className="w-px h-5 bg-gray-200 mx-1" />
+        <div className="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-1" />
 
         <Button
           variant="ghost"
           size="sm"
           icon={<Settings size={15} />}
           onClick={openSettings}
-          title="Cài đặt Workspace & Giao diện"
+          title="Cài đặt Workspace, Giao diện & Phím tắt"
+        />
+
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<LogOut size={15} />}
+          onClick={handleExitClick}
+          title="Thoát / Đóng sơ đồ hiện tại"
+          className="text-gray-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
         />
       </header>
 
-      {/* Confirm dialog for New Project when dirty */}
-      {showNewConfirm && (
+      {/* Exit / Unsaved changes confirmation dialog */}
+      <ExitFlowDialog
+        isOpen={pendingAction !== null}
+        onClose={() => {
+          setPendingAction(null);
+          setPendingFile(null);
+        }}
+        onConfirmExit={handleConfirmPendingAction}
+        title={
+          pendingAction === 'new'
+            ? 'Xác nhận tạo sơ đồ mới'
+            : pendingAction === 'open'
+            ? 'Xác nhận mở sơ đồ khác'
+            : 'Xác nhận đóng sơ đồ'
+        }
+        description={
+          pendingAction === 'new'
+            ? 'Sơ đồ hiện tại có những thay đổi chưa được lưu. Bạn có muốn lưu sơ đồ trước khi tạo sơ đồ mới không?'
+            : pendingAction === 'open'
+            ? 'Sơ đồ hiện tại có những thay đổi chưa được lưu. Bạn có muốn lưu sơ đồ trước khi mở file mới không?'
+            : 'Sơ đồ hiện tại có những thay đổi chưa được lưu. Bạn có muốn lưu sơ đồ trước khi đóng phiên làm việc không?'
+        }
+        saveButtonLabel={
+          pendingAction === 'new'
+            ? 'Lưu sơ đồ & Tạo mới'
+            : pendingAction === 'open'
+            ? 'Lưu sơ đồ & Mở file'
+            : 'Lưu sơ đồ & Thoát'
+        }
+        discardButtonLabel={
+          pendingAction === 'new'
+            ? 'Không lưu & Tạo mới'
+            : pendingAction === 'open'
+            ? 'Không lưu & Mở file'
+            : 'Không lưu & Thoát'
+        }
+      />
+
+      {/* Clean Exit Confirmation (when no dirty changes, but user clicks Exit with content) */}
+      {showCleanExitConfirm && (
         <ConfirmDialog
           isOpen={true}
-          title="Tạo sơ đồ mới"
-          message="Bạn có những thay đổi chưa lưu. Bạn có chắc muốn tạo sơ đồ mới và bỏ qua các thay đổi hiện tại?"
-          confirmLabel="Tạo mới"
-          variant="danger"
+          title="Đóng sơ đồ hiện tại"
+          message="Bạn có chắc muốn đóng sơ đồ này và bắt đầu lại với khung vẽ trống không?"
+          confirmLabel="Đóng sơ đồ"
+          variant="primary"
           onConfirm={() => {
             newProject();
             setNameInput('Untitled Project');
-            setShowNewConfirm(false);
-            addToast('info', 'Đã tạo sơ đồ mới.');
+            setShowCleanExitConfirm(false);
+            addToast('info', 'Đã đóng sơ đồ.');
           }}
-          onCancel={() => setShowNewConfirm(false)}
+          onCancel={() => setShowCleanExitConfirm(false)}
         />
       )}
     </>

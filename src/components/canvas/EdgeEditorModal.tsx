@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { LayoutEdge } from '../../services/LayoutEngine';
-import { FlowType } from '../../types/schema';
-import { Palette, Route, Trash2 } from 'lucide-react';
+import { FlowType, BorderSide, NodeBorderAnchor } from '../../types/schema';
+import { Palette, Route, Trash2, Crosshair, ArrowRight } from 'lucide-react';
 
 interface EdgeEditorModalProps {
   isOpen: boolean;
@@ -11,7 +11,13 @@ interface EdgeEditorModalProps {
   edge: LayoutEdge | null;
   fromNodeTitle?: string;
   toNodeTitle?: string;
-  onSave: (updates: { message_label: string; flow_type: FlowType; color?: string }) => void;
+  onSave: (updates: {
+    message_label: string;
+    flow_type: FlowType;
+    color?: string;
+    source_anchor?: NodeBorderAnchor;
+    target_anchor?: NodeBorderAnchor;
+  }) => void;
   onDelete?: () => void;
   onEditRoute?: () => void;
   onResetRoute?: () => void;
@@ -28,6 +34,13 @@ const PRESET_EDGE_COLORS = [
   '#EC4899', // Pink
 ];
 
+const BORDER_SIDES: { side: BorderSide; label: string }[] = [
+  { side: 'right', label: 'Bên phải' },
+  { side: 'left', label: 'Bên trái' },
+  { side: 'top', label: 'Phía trên' },
+  { side: 'bottom', label: 'Phía dưới' },
+];
+
 export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
   isOpen,
   onClose,
@@ -42,12 +55,16 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
   const [label, setLabel] = useState('');
   const [flowType, setFlowType] = useState<FlowType>('solid');
   const [color, setColor] = useState('#64748B');
+  const [sourceSide, setSourceSide] = useState<BorderSide>('right');
+  const [targetSide, setTargetSide] = useState<BorderSide>('left');
 
   useEffect(() => {
     if (edge) {
       setLabel(edge.label || '');
       setFlowType(edge.flowType || 'solid');
       setColor(edge.color || (edge.isMacro ? '#6366F1' : '#64748B'));
+      setSourceSide(edge.sourceAnchor?.side || 'right');
+      setTargetSide(edge.targetAnchor?.side || 'left');
     }
   }, [edge, isOpen]);
 
@@ -59,12 +76,14 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
       message_label: label.trim(),
       flow_type: flowType,
       color,
+      source_anchor: { side: sourceSide, ratio: edge.sourceAnchor?.ratio ?? 0.5 },
+      target_anchor: { side: targetSide, ratio: edge.targetAnchor?.ratio ?? 0.5 },
     });
     onClose();
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Tùy Chỉnh Luồng Dữ Liệu (Message Flow)" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title="Tùy Chỉnh Luồng Dữ Liệu (Message Flow)" size="md">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Source -> Target Info */}
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600 flex items-center justify-between">
@@ -90,6 +109,80 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
             onChange={(e) => setLabel(e.target.value)}
             className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
+        </div>
+
+        {/* Border Touch Points (Vị trí 2 đầu tiếp xúc viền) */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Crosshair size={14} className="text-blue-600" />
+              Điểm chạm trên viền Node (Endpoints)
+            </label>
+            {onEditRoute && (
+              <button
+                type="button"
+                onClick={() => {
+                  onEditRoute();
+                  onClose();
+                }}
+                className="text-xs text-blue-600 hover:underline font-semibold flex items-center gap-1"
+              >
+                Kéo trực quan trên Canvas
+                <ArrowRight size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            {/* Source touch point */}
+            <div>
+              <p className="font-medium text-gray-600 mb-1.5 truncate" title={`Node nguồn: ${fromNodeTitle}`}>
+                Đầu ra: <span className="font-semibold text-blue-600">{fromNodeTitle}</span>
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {BORDER_SIDES.map((b) => (
+                  <button
+                    key={b.side}
+                    type="button"
+                    onClick={() => setSourceSide(b.side)}
+                    className={`py-1.5 px-2 rounded-lg border text-[11px] font-medium transition-colors ${
+                      sourceSide === b.side
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold shadow-xs'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-100 bg-white'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Target touch point */}
+            <div>
+              <p className="font-medium text-gray-600 mb-1.5 truncate" title={`Node đích: ${toNodeTitle}`}>
+                Đầu vào: <span className="font-semibold text-red-600">{toNodeTitle}</span>
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {BORDER_SIDES.map((b) => (
+                  <button
+                    key={b.side}
+                    type="button"
+                    onClick={() => setTargetSide(b.side)}
+                    className={`py-1.5 px-2 rounded-lg border text-[11px] font-medium transition-colors ${
+                      targetSide === b.side
+                        ? 'border-red-500 bg-red-50 text-red-700 font-semibold shadow-xs'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-100 bg-white'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 leading-relaxed italic">
+            * Điểm chạm luôn bám chặt trên viền của 2 Node liên kết và tự động di chuyển theo Node khi dời vị trí.
+          </p>
         </div>
 
         {/* Flow Stroke Style */}
@@ -169,12 +262,12 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
           </div>
         </div>
 
-        {/* Manual routing (fallback when auto routing is not good enough) */}
+        {/* Manual routing button */}
         {onEditRoute && (
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Route size={13} className="text-gray-500" />
-              Đường đi (Route)
+              Định tuyến trên Canvas
             </label>
             <div className="flex items-center gap-2">
               <button
@@ -183,9 +276,10 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                   onEditRoute();
                   onClose();
                 }}
-                className="flex-1 text-xs font-medium border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg px-3 py-2 transition-colors"
+                className="flex-1 text-xs font-medium border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg px-3 py-2 transition-colors flex items-center justify-center gap-1.5"
               >
-                Chỉnh đường đi thủ công
+                <Crosshair size={13} />
+                Kéo trực quan điểm chạm & đường nối trên Canvas
               </button>
               {edge.isManualRoute && onResetRoute && (
                 <button
@@ -200,11 +294,6 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-gray-500 mt-1.5">
-              {edge.isManualRoute
-                ? 'Luồng này đang dùng đường đi thủ công.'
-                : 'Đang tự động định tuyến. Dùng khi hệ thống chưa tìm được đường đi hợp lý.'}
-            </p>
           </div>
         )}
 

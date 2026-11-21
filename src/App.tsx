@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { WorkspacePicker } from './components/settings/WorkspacePicker';
 import { AppShell } from './components/layout/AppShell';
 import { ToastContainer } from './components/common/Toast';
 import { SettingsDialog } from './components/settings/SettingsDialog';
@@ -9,8 +8,9 @@ import { LoggerService } from './services/LoggerService';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 
 export default function App() {
-  const { workspacePath, workspaceHandle, theme } = useSettingsStore();
+  const { workspaceHandle, theme } = useSettingsStore();
 
+  // Đảm bảo bật cảnh báo rời trang nếu sơ đồ có thay đổi chưa lưu
   useBeforeUnload();
 
   // Handle Dark mode theme class on document element
@@ -35,17 +35,8 @@ export default function App() {
     if (workspaceHandle) {
       FileSystemService.setWorkspaceHandle(workspaceHandle);
     }
-    LoggerService.info('App', 'Khởi động ứng dụng Wode (100% Offline Local-first)');
+    LoggerService.info('App', 'Khởi động ứng dụng Wode (Sẵn sàng làm việc ngay lập tức)');
   }, [workspaceHandle]);
-
-  if (!workspacePath) {
-    return (
-      <>
-        <WorkspacePicker />
-        <ToastContainer />
-      </>
-    );
-  }
 
   return (
     <>
