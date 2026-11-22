@@ -78,7 +78,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Node Kind Selection (Standard vs Storage Object) */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
             Phân loại thành phần
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -87,14 +87,14 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
               onClick={() => setNodeKind('standard')}
               className={`p-2.5 rounded-lg border text-left flex items-start gap-2.5 transition-colors ${
                 nodeKind === 'standard'
-                  ? 'border-blue-500 bg-blue-50/70 text-blue-900 ring-1 ring-blue-500'
-                  : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                  ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 ring-1 ring-blue-500'
+                  : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               <UserCheck size={18} className="text-blue-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-semibold">Nhiệm vụ chuẩn</p>
-                <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+                <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
                   Cố định trong làn bơi (Swimlane), chỉ di chuyển ngang.
                 </p>
               </div>
@@ -105,14 +105,14 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
               onClick={() => setNodeKind('storage')}
               className={`p-2.5 rounded-lg border text-left flex items-start gap-2.5 transition-colors ${
                 nodeKind === 'storage'
-                  ? 'border-sky-500 bg-sky-50/70 text-sky-900 ring-1 ring-sky-500'
-                  : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                  ? 'border-sky-500 bg-sky-50/70 dark:bg-sky-950/60 text-sky-900 dark:text-sky-200 ring-1 ring-sky-500'
+                  : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               <Database size={18} className="text-sky-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-semibold">Storage</p>
-                <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+                <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
                   Database, Cache... tự hút vào làn khi kéo thả.
                 </p>
               </div>
@@ -123,14 +123,14 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
               onClick={() => setNodeKind('mediator')}
               className={`p-2.5 rounded-lg border text-left flex items-start gap-2.5 transition-colors ${
                 nodeKind === 'mediator'
-                  ? 'border-violet-500 bg-violet-50/70 text-violet-900 ring-1 ring-violet-500'
-                  : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                  ? 'border-violet-500 bg-violet-50/70 dark:bg-violet-950/60 text-violet-900 dark:text-violet-200 ring-1 ring-violet-500'
+                  : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               <ArrowLeftRight size={18} className="text-violet-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-semibold">Kênh trung gian</p>
-                <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+                <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
                   Queue, API gateway... tự hút vào làn khi kéo thả.
                 </p>
               </div>
@@ -140,7 +140,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
 
         {/* Title */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
             Tiêu đề nhiệm vụ
           </label>
           <input
@@ -150,19 +150,19 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
             placeholder={nodeKind === 'storage' ? 'Ví dụ: Redis Cache, PostgreSQL DB...' : nodeKind === 'mediator' ? 'Ví dụ: Message Queue, API Gateway, Webhook...' : 'Ví dụ: Tạo đơn hàng, Duyệt thanh toán...'}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
           />
         </div>
 
         {/* Role Selection */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
             {nodeKind !== 'standard' ? 'Làn mặc định ban đầu' : 'Thuộc Vai Trò (Swimlane)'}
           </label>
           <select
             value={roleId}
             onChange={(e) => setRoleId(e.target.value)}
-            className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 bg-white"
+            className="w-full text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
           >
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
@@ -175,7 +175,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
         {/* Corner Symbol (only if standard) */}
         {nodeKind === 'standard' && (
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
               Biểu tượng góc phân loại
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -186,8 +186,8 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
                   onClick={() => setCornerSymbol(s.id)}
                   className={`flex items-center gap-2 px-3 py-2 text-xs rounded-lg border text-left transition-colors ${
                     cornerSymbol === s.id
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-medium'
+                      : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <CornerSymbolIcon symbol={s.id} size={15} />
@@ -198,7 +198,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Hủy
           </Button>

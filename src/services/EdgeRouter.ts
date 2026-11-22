@@ -44,6 +44,9 @@ const NODE_PADDING = 10;
 /** Straight horizontal run kept at both ends so arrowheads always point straight into a node. */
 export const PORT_STUB = 14;
 
+/** Max offset threshold (in px) under which an edge connecting two nodes is snapped into a pure straight line. */
+export const STRAIGHT_ALIGN_TOLERANCE = 18;
+
 const TURN_COST = 5;
 const OVERLAP_COST = 14;
 const CROSSING_COST = 2.5;
@@ -123,6 +126,73 @@ export function simplifyPolyline(points: Point[]): Point[] {
     result.push(p);
   });
   return result;
+}
+
+/**
+ * Detects if a polyline represents a connection between two nodes that are intended
+ * to be straight (vertically or horizontally aligned within tolerance) and snaps
+ * it into a single clean 2-point line, eliminating crooked bends and S-curves.
+ */
+export function straightenAlignedPolyline(points: Point[], tolerance = STRAIGHT_ALIGN_TOLERANCE): Point[] {
+  if (points.length <= 2) return points;
+  const start = points[0];
+  const end = points[points.length - 1];
+
+  // Vertical alignment check: all points stay within tolerance of the straight line
+  const isAllVertical = points.every(
+    (p) => Math.abs(p.x - start.x) <= tolerance && Math.abs(p.x - end.x) <= tolerance
+  );
+  if (isAllVertical && Math.abs(start.y - end.y) > 15) {
+    const alignX = Math.round((start.x + end.x) / 2);
+    return [{ x: alignX, y: start.y }, { x: alignX, y: end.y }];
+  }
+
+  // Horizontal alignment check: all points stay within tolerance of the straight line
+  const isAllHorizontal = points.every(
+    (p) => Math.abs(p.y - start.y) <= tolerance && Math.abs(p.y - end.y) <= tolerance
+  );
+  if (isAllHorizontal && Math.abs(start.x - end.x) > 15) {
+    const alignY = Math.round((start.y + end.y) / 2);
+    return [{ x: start.x, y: alignY }, { x: end.x, y: alignY }];
+  }
+
+  return points;
+}
+
+/**
+ * Smartly infers the most natural connection sides between two nodes when not explicitly configured.
+ * If nodes are stacked vertically (e.g., across swimlanes) and aligned horizontally, it uses bottom->top.
+ */
+export function inferDefaultBorderSides(
+  fromNode: { x: number; y: number; width: number; height: number },
+  toNode: { x: number; y: number; width: number; height: number }
+): { sourceSide: BorderSide; targetSide: BorderSide } {
+  const fromCenterX = fromNode.x + fromNode.width / 2;
+  const fromCenterY = fromNode.y + fromNode.height / 2;
+  const toCenterX = toNode.x + toNode.width / 2;
+  const toCenterY = toNode.y + toNode.height / 2;
+
+  const dx = toCenterX - fromCenterX;
+  const dy = toCenterY - fromCenterY;
+
+  const maxNodeWidth = Math.max(fromNode.width, toNode.width);
+  // Vertically stacked if horizontal center distance is within 70% of node width and vertical gap is significant
+  const isVerticallyStacked = Math.abs(dx) <= maxNodeWidth * 0.75;
+
+  if (isVerticallyStacked && Math.abs(dy) >= 30) {
+    if (dy > 0) {
+      return { sourceSide: 'bottom', targetSide: 'top' };
+    } else {
+      return { sourceSide: 'top', targetSide: 'bottom' };
+    }
+  }
+
+  // Standard horizontal left-to-right or right-to-left
+  if (dx >= 0) {
+    return { sourceSide: 'right', targetSide: 'left' };
+  } else {
+    return { sourceSide: 'left', targetSide: 'right' };
+  }
 }
 
 /** Turns a polyline into an SVG path with softly rounded corners. */
@@ -337,6 +407,32 @@ export function buildOrthogonalConnector(
   startSide: BorderSide = 'right',
   endSide: BorderSide = 'left'
 ): Point[] {
+  // 1. Direct Straight Vertical Check
+  const isOpposingVertical =
+    (startSide === 'bottom' && endSide === 'top' && start.y <= end.y) ||
+    (startSide === 'top' && endSide === 'bottom' && start.y >= end.y);
+
+  if (isOpposingVertical && Math.abs(start.x - end.x) <= STRAIGHT_ALIGN_TOLERANCE) {
+    const alignX = Math.round((start.x + end.x) / 2);
+    return [
+      { x: alignX, y: start.y },
+      { x: alignX, y: end.y },
+    ];
+  }
+
+  // 2. Direct Straight Horizontal Check
+  const isOpposingHorizontal =
+    (startSide === 'right' && endSide === 'left' && start.x <= end.x) ||
+    (startSide === 'left' && endSide === 'right' && start.x >= end.x);
+
+  if (isOpposingHorizontal && Math.abs(start.y - end.y) <= STRAIGHT_ALIGN_TOLERANCE) {
+    const alignY = Math.round((start.y + end.y) / 2);
+    return [
+      { x: start.x, y: alignY },
+      { x: end.x, y: alignY },
+    ];
+  }
+
   const pStart = getPortStubPoint(start, startSide, PORT_STUB);
   const pEnd = getPortStubPoint(end, endSide, PORT_STUB);
 
@@ -393,7 +489,7 @@ export function buildOrthogonalConnector(
     }
   }
 
-  return simplifyPolyline(pts);
+  return straightenAlignedPolyline(simplifyPolyline(pts));
 }
 
 /**
@@ -463,8 +559,9 @@ export function assignUniversalPorts(
     const toNode = nodeById.get(r.toId);
     if (!fromNode || !toNode) return;
 
-    const sourceSide: BorderSide = r.sourceAnchor?.side || 'right';
-    const targetSide: BorderSide = r.targetAnchor?.side || 'left';
+    const inferred = inferDefaultBorderSides(fromNode, toNode);
+    const sourceSide: BorderSide = r.sourceAnchor?.side || inferred.sourceSide;
+    const targetSide: BorderSide = r.targetAnchor?.side || inferred.targetSide;
 
     const sourceKey = `${r.fromId}:${sourceSide}`;
     if (!groups.has(sourceKey)) groups.set(sourceKey, []);
@@ -684,6 +781,54 @@ function routeAutomatically(
   startSide: BorderSide = 'right',
   endSide: BorderSide = 'left'
 ): Point[] {
+  // 1. Direct Straight Vertical Check
+  const isDirectVertical =
+    (startSide === 'bottom' && endSide === 'top' && start.y < end.y) ||
+    (startSide === 'top' && endSide === 'bottom' && start.y > end.y);
+
+  if (isDirectVertical && Math.abs(start.x - end.x) <= STRAIGHT_ALIGN_TOLERANCE) {
+    const alignX = Math.round((start.x + end.x) / 2);
+    const col = Math.round(alignX / GRID);
+    const rStart = Math.round((start.y + (startSide === 'bottom' ? PORT_STUB : -PORT_STUB)) / GRID);
+    const rEnd = Math.round((end.y + (endSide === 'top' ? -PORT_STUB : PORT_STUB)) / GRID);
+    const minR = Math.min(rStart, rEnd);
+    const maxR = Math.max(rStart, rEnd);
+    let clear = true;
+    for (let r = minR; r <= maxR; r++) {
+      if (r >= 0 && r < grid.rows && col >= 0 && col < grid.cols && grid.blocked[r * grid.cols + col]) {
+        clear = false;
+        break;
+      }
+    }
+    if (clear) {
+      return [{ x: alignX, y: start.y }, { x: alignX, y: end.y }];
+    }
+  }
+
+  // 2. Direct Straight Horizontal Check
+  const isDirectHorizontal =
+    (startSide === 'right' && endSide === 'left' && start.x < end.x) ||
+    (startSide === 'left' && endSide === 'right' && start.x > end.x);
+
+  if (isDirectHorizontal && Math.abs(start.y - end.y) <= STRAIGHT_ALIGN_TOLERANCE) {
+    const alignY = Math.round((start.y + end.y) / 2);
+    const row = Math.round(alignY / GRID);
+    const cStart = Math.round((start.x + (startSide === 'right' ? PORT_STUB : -PORT_STUB)) / GRID);
+    const cEnd = Math.round((end.x + (endSide === 'left' ? -PORT_STUB : PORT_STUB)) / GRID);
+    const minC = Math.min(cStart, cEnd);
+    const maxC = Math.max(cStart, cEnd);
+    let clear = true;
+    for (let c = minC; c <= maxC; c++) {
+      if (row >= 0 && row < grid.rows && c >= 0 && c < grid.cols && grid.blocked[row * grid.cols + c]) {
+        clear = false;
+        break;
+      }
+    }
+    if (clear) {
+      return [{ x: start.x, y: alignY }, { x: end.x, y: alignY }];
+    }
+  }
+
   const getCell = (p: Point, side: BorderSide) => {
     switch (side) {
       case 'right':
@@ -732,7 +877,7 @@ function routeAutomatically(
   if (cells) {
     registerOccupancy(grid, cells);
     const body = cells.map((cell) => ({ x: cell.c * GRID, y: cell.r * GRID }));
-    return simplifyPolyline([start, ...body, end]);
+    return straightenAlignedPolyline(simplifyPolyline([start, ...body, end]));
   } else {
     return buildOrthogonalConnector(start, end, startSide, endSide);
   }
@@ -806,10 +951,11 @@ export function routeEdges(
   const endpoints = (r: RouteRequest) => {
     const from = nodeById.get(r.fromId)!;
     const to = nodeById.get(r.toId)!;
-    const start = ports.start.get(r.key) || getNodeSidePort(from, r.sourceAnchor?.side || 'right', 0, 1);
-    const end = ports.end.get(r.key) || getNodeSidePort(to, r.targetAnchor?.side || 'left', 0, 1);
-    const startSide: BorderSide = r.sourceAnchor?.side || 'right';
-    const endSide: BorderSide = r.targetAnchor?.side || 'left';
+    const inferred = inferDefaultBorderSides(from, to);
+    const startSide: BorderSide = r.sourceAnchor?.side || inferred.sourceSide;
+    const endSide: BorderSide = r.targetAnchor?.side || inferred.targetSide;
+    const start = ports.start.get(r.key) || getNodeSidePort(from, startSide, 0, 1);
+    const end = ports.end.get(r.key) || getNodeSidePort(to, endSide, 0, 1);
     return { start, end, startSide, endSide };
   };
 

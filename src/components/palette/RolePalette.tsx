@@ -165,17 +165,17 @@ export const RolePalette: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-full bg-white select-none">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 select-none">
       {/* Search & Actions Bar */}
-      <div className="p-3 border-b border-gray-200 space-y-2 shrink-0 bg-gray-50/50">
+      <div className="p-3 border-b border-gray-200 dark:border-slate-800 space-y-2 shrink-0 bg-gray-50/50 dark:bg-slate-900/50">
         <div className="relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Tìm vai trò hoặc nhiệm vụ..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-md outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full text-xs pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-200 dark:border-slate-700 rounded-md outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </div>
 

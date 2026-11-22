@@ -82,17 +82,17 @@ export const FrameCard: React.FC<FrameCardProps> = ({
   return (
     <div
       onClick={onSelectFrame}
-      className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden transition-all hover:border-gray-300"
+      className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden transition-all hover:border-gray-300 dark:hover:border-slate-700"
     >
       {/* Frame Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50/80 border-b border-gray-100">
+      <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50/80 dark:bg-slate-800/80 border-b border-gray-100 dark:border-slate-800">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <button
             onClick={(e) => {
               e.stopPropagation();
               setCollapsed(!collapsed);
             }}
-            className="text-gray-400 hover:text-gray-600 shrink-0"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 shrink-0"
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -114,7 +114,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                   if (e.key === 'Enter') handleSaveTitle();
                   if (e.key === 'Escape') setEditingTitle(false);
                 }}
-                className="w-full text-xs font-semibold border border-blue-400 rounded px-1.5 py-0.5 outline-none"
+                className="w-full text-xs font-semibold bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-blue-400 rounded px-1.5 py-0.5 outline-none"
               />
               <button onClick={handleSaveTitle} className="text-green-600 hover:text-green-700 p-0.5">
                 <Check size={12} />
@@ -125,7 +125,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
             </div>
           ) : (
             <span
-              className="text-xs font-semibold text-gray-800 truncate cursor-pointer hover:text-blue-600"
+              className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
               title={frame.title}
               onDoubleClick={(e) => {
                 e.stopPropagation();
@@ -264,8 +264,8 @@ export const FrameCard: React.FC<FrameCardProps> = ({
 
           {/* Macro-flow Branching Target */}
           {otherFrames.length > 0 && (
-            <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-              <span className="text-[11px] text-gray-500 flex items-center gap-1">
+            <div className="pt-2 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-[11px] text-gray-500 dark:text-slate-400 flex items-center gap-1">
                 <GitBranch size={12} className="text-amber-500" />
                 Rẽ nhánh tiếp:
               </span>
@@ -275,7 +275,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                   onUpdateNextFrameTarget(e.target.value ? e.target.value : null)
                 }
                 onClick={(e) => e.stopPropagation()}
-                className="text-[11px] bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-700 outline-none max-w-[140px] truncate"
+                className="text-[11px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-gray-700 dark:text-slate-200 outline-none max-w-[140px] truncate"
               >
                 <option value="">Tuần tự (Frame tiếp theo)</option>
                 {otherFrames.map((f) => (

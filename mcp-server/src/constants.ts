@@ -1,0 +1,28 @@
+export const APP_VERSION = '1.0.0';
+export const DEFAULT_WS_PORT = 3333;
+
+export const DEFAULT_ROLE_COLORS = [
+  '#3B82F6', // Blue
+  '#10B981', // Emerald
+  '#8B5CF6', // Purple
+  '#F59E0B', // Amber
+  '#06B6D4', // Cyan
+  '#EC4899', // Pink
+  '#6366F1', // Indigo
+  '#14B8A6', // Teal
+  '#F97316', // Orange
+  '#84CC16', // Lime
+];
+
+export const CANVAS_DEFAULTS = {
+  SWIMLANE_MIN_HEIGHT: 140,
+  SWIMLANE_PADDING_TOP: 45,
+  SWIMLANE_PADDING_BOTTOM: 25,
+  NODE_WIDTH: 220,
+  NODE_MIN_HEIGHT: 64,
+  DEFAULT_HORIZONTAL_SPACING: 40,
+  SWIMLANE_LABEL_WIDTH: 160,
+  START_X: 190,
+  FRAME_PADDING_HORIZONTAL: 20,
+  FRAME_PADDING_VERTICAL: 15,
+};

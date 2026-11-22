@@ -46,7 +46,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
             Tên vai trò
           </label>
           <input
@@ -56,12 +56,12 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
             placeholder="Ví dụ: Khách hàng, Hệ thống, Kế toán..."
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
             Màu nhận diện
           </label>
           <div className="flex flex-wrap gap-2.5 mb-2">
@@ -71,7 +71,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                 key={c}
                 onClick={() => setColor(c)}
                 className={`w-7 h-7 rounded-full transition-transform ${
-                  color.toLowerCase() === c.toLowerCase() ? 'scale-125 ring-2 ring-offset-2 ring-blue-500 shadow-sm' : 'hover:scale-110'
+                  color.toLowerCase() === c.toLowerCase() ? 'scale-125 ring-2 ring-offset-2 ring-blue-500 dark:ring-offset-slate-900 shadow-sm' : 'hover:scale-110'
                 }`}
                 style={{ backgroundColor: c }}
               />
@@ -82,13 +82,13 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
-              className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
+              className="w-8 h-8 rounded border border-gray-300 dark:border-slate-700 cursor-pointer bg-transparent"
             />
-            <span className="text-xs font-mono text-gray-500 uppercase">{color}</span>
+            <span className="text-xs font-mono text-gray-600 dark:text-slate-300 uppercase font-semibold">{color}</span>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Hủy
           </Button>

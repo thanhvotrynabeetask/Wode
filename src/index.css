@@ -10,3 +10,23 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Ensure high contrast for inputs, textareas, and selects in dark mode */
+.dark input:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  color: #F8FAFC !important;
+  background-color: #1E293B;
+  border-color: #334155;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+.dark select option {
+  background-color: #0F172A;
+  color: #F8FAFC;
+}
+

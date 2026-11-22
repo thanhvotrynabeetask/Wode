@@ -358,31 +358,31 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
 
       {/* Form to add explicit edge */}
       {nodes.length >= 2 && (
-        <div className="pt-2 border-t border-gray-200/80 space-y-2">
+        <div className="pt-2 border-t border-gray-200/80 dark:border-slate-800 space-y-2">
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[10px] text-gray-500 block mb-0.5">Từ Node</label>
+              <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">Từ Node</label>
               <select
                 value={fromInstance}
                 onChange={(e) => setFromInstance(e.target.value)}
-                className="w-full bg-white border border-gray-300 rounded px-1.5 py-1 text-[11px] truncate"
+                className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded px-1.5 py-1 text-[11px] truncate"
               >
                 {nodes.map((n) => (
-                  <option key={n.instance_id} value={n.instance_id}>
+                  <option key={n.instance_id} value={n.instance_id} className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">
                     {n.custom_label || n.title}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-500 block mb-0.5">Đến Node</label>
+              <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">Đến Node</label>
               <select
                 value={toInstance}
                 onChange={(e) => setToInstance(e.target.value)}
-                className="w-full bg-white border border-gray-300 rounded px-1.5 py-1 text-[11px] truncate"
+                className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded px-1.5 py-1 text-[11px] truncate"
               >
                 {nodes.map((n) => (
-                  <option key={n.instance_id} value={n.instance_id}>
+                  <option key={n.instance_id} value={n.instance_id} className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">
                     {n.custom_label || n.title}
                   </option>
                 ))}
@@ -396,22 +396,22 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
               placeholder="Tên thông điệp luồng..."
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              className="flex-1 bg-white border border-gray-300 rounded px-2 py-1 text-[11px] outline-none"
+              className="flex-1 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-gray-800 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 rounded px-2 py-1 text-[11px] outline-none"
             />
             <select
               value={flowType}
               onChange={(e) => setFlowType(e.target.value as FlowType)}
-              className="bg-white border border-gray-300 rounded px-1.5 py-1 text-[11px]"
+              className="bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded px-1.5 py-1 text-[11px]"
             >
-              <option value="solid">Nét liền</option>
-              <option value="dashed">Nét đứt</option>
-              <option value="dotted">Nét chấm</option>
+              <option value="solid" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">Nét liền</option>
+              <option value="dashed" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">Nét đứt</option>
+              <option value="dotted" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">Nét chấm</option>
             </select>
           </div>
 
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-gray-500">Màu:</span>
+              <span className="text-[10px] text-gray-500 dark:text-slate-400">Màu:</span>
               <div className="flex gap-1">
                 {PRESET_COLORS.map((c) => (
                   <button

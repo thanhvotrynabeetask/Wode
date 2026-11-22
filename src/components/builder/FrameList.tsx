@@ -44,14 +44,14 @@ export const FrameList: React.FC = () => {
   const frameToDelete = schema.frames.find((f) => f.frame_id === deleteConfirmFrameId);
 
   return (
-    <div className="flex flex-col h-full bg-gray-50/50 select-none">
+    <div className="flex flex-col h-full bg-gray-50/50 dark:bg-slate-900 select-none">
       {/* Header bar */}
-      <div className="p-3 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
+      <div className="p-3 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between shrink-0">
         <div>
-          <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+          <h3 className="text-xs font-bold text-gray-800 dark:text-slate-100 uppercase tracking-wider">
             Phân Đoạn Quy Trình
           </h3>
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-gray-400 dark:text-slate-500">
             {schema.frames.length} Frame(s) • Macro-flow
           </p>
         </div>

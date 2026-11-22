@@ -16,6 +16,8 @@ import {
   pointsToPath,
   pointToBorderSide,
   getNodePortForEdge,
+  getNodeSidePort,
+  inferDefaultBorderSides,
   buildOrthogonalConnector,
 } from '../../services/EdgeRouter';
 import { BorderSide, NodeBorderAnchor } from '../../types/schema';
@@ -113,6 +115,15 @@ export const DiagramCanvas: React.FC = () => {
     newX: number;
     assignedRoleId?: string;
     insertIndex: number;
+  } | null>(null);
+
+  // Auto-alignment snap guideline state during node drag
+  const [snapGuide, setSnapGuide] = useState<{
+    type: 'vertical' | 'horizontal';
+    pos: number;
+    start: number;
+    end: number;
+    alignedNodeTitle?: string;
   } | null>(null);
 
   const layout = useMemo(() => {
@@ -287,14 +298,112 @@ export const DiagramCanvas: React.FC = () => {
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
         rafRef.current = requestAnimationFrame(() => {
-          const dx = (e.clientX - multiDragState.startClientX) / zoom;
-          const dy = (e.clientY - multiDragState.startClientY) / zoom;
+          const rawDx = (e.clientX - multiDragState.startClientX) / zoom;
+          const rawDy = (e.clientY - multiDragState.startClientY) / zoom;
+
+          // Find primary node and its proposed position
+          const primaryItem =
+            multiDragState.items.find((i) => i.node.instanceId === multiDragState.primaryNode.instanceId) ||
+            multiDragState.items[0];
+          const primaryNode = primaryItem.node;
+          const rawProposedPrimaryX = Math.max(160, Math.round(primaryItem.nodeStartX + rawDx));
+
+          // Nodes not being dragged (candidates for auto-alignment)
+          const draggingIds = new Set(multiDragState.items.map((i) => i.node.instanceId));
+          const candidateNodes = layout.nodes.filter((n) => !draggingIds.has(n.instanceId));
+
+          // Calculate horizontal alignment snap against other nodes above/below across any swimlane
+          let effectiveDx = rawDx;
+          let activeGuide: {
+            type: 'vertical' | 'horizontal';
+            pos: number;
+            start: number;
+            end: number;
+            alignedNodeTitle?: string;
+          } | null = null;
+
+          const SNAP_THRESHOLD = 15;
+          let bestSnapScore = Infinity;
+          let bestSnappedX = rawProposedPrimaryX;
+
+          const primaryCenterX = rawProposedPrimaryX + primaryNode.width / 2;
+          const primaryLeftX = rawProposedPrimaryX;
+          const primaryRightX = rawProposedPrimaryX + primaryNode.width;
+
+          candidateNodes.forEach((other) => {
+            const otherCenterX = other.x + other.width / 2;
+            const otherLeftX = other.x;
+            const otherRightX = other.x + other.width;
+
+            // 1. Center-to-Center snap (highest priority: produces 100% straight vertical flows)
+            const diffCenter = Math.abs(primaryCenterX - otherCenterX);
+            if (diffCenter <= SNAP_THRESHOLD) {
+              const score = diffCenter * 0.75;
+              if (score < bestSnapScore) {
+                bestSnapScore = score;
+                bestSnappedX = otherCenterX - primaryNode.width / 2;
+                const minY = Math.min(primaryNode.y, other.y) - 14;
+                const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
+                activeGuide = {
+                  type: 'vertical',
+                  pos: otherCenterX,
+                  start: minY,
+                  end: maxY,
+                  alignedNodeTitle: other.title,
+                };
+              }
+            }
+
+            // 2. Left-to-Left snap
+            const diffLeft = Math.abs(primaryLeftX - otherLeftX);
+            if (diffLeft <= SNAP_THRESHOLD) {
+              const score = diffLeft;
+              if (score < bestSnapScore) {
+                bestSnapScore = score;
+                bestSnappedX = otherLeftX;
+                const minY = Math.min(primaryNode.y, other.y) - 14;
+                const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
+                activeGuide = {
+                  type: 'vertical',
+                  pos: otherLeftX,
+                  start: minY,
+                  end: maxY,
+                  alignedNodeTitle: other.title,
+                };
+              }
+            }
+
+            // 3. Right-to-Right snap
+            const diffRight = Math.abs(primaryRightX - otherRightX);
+            if (diffRight <= SNAP_THRESHOLD) {
+              const score = diffRight;
+              if (score < bestSnapScore) {
+                bestSnapScore = score;
+                bestSnappedX = otherRightX - primaryNode.width;
+                const minY = Math.min(primaryNode.y, other.y) - 14;
+                const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
+                activeGuide = {
+                  type: 'vertical',
+                  pos: otherRightX,
+                  start: minY,
+                  end: maxY,
+                  alignedNodeTitle: other.title,
+                };
+              }
+            }
+          });
+
+          if (bestSnapScore < Infinity) {
+            effectiveDx = bestSnappedX - primaryItem.nodeStartX;
+          }
+
+          setSnapGuide(activeGuide);
 
           const updatedOffsets = new Map<string, { x: number; y: number; assignedRoleId?: string }>();
 
           multiDragState.items.forEach(({ node, nodeStartX, nodeStartY }) => {
             const isSpecial = node.nodeKind === 'storage' || node.nodeKind === 'mediator';
-            const newX = Math.max(160, Math.round(nodeStartX + dx));
+            const newX = Math.max(160, Math.round(nodeStartX + effectiveDx));
 
             let newY = nodeStartY;
             let assignedRoleId: string | undefined = undefined;
@@ -304,8 +413,8 @@ export const DiagramCanvas: React.FC = () => {
               : layout.swimlanes;
 
             if (isSpecial && diagSwimlanes.length > 0) {
-              // Magnet: follow the lane under the cursor (nearest one when outside) and sit centered in it.
-              const centerNodeY = nodeStartY + dy + node.height / 2;
+              // Magnet: follow the lane under the cursor and sit centered in it
+              const centerNodeY = nodeStartY + rawDy + node.height / 2;
               const targetLane =
                 diagSwimlanes.find(
                   (lane) => centerNodeY >= lane.y && centerNodeY <= lane.y + lane.height
@@ -322,7 +431,7 @@ export const DiagramCanvas: React.FC = () => {
               if (lane) {
                 const minY = lane.y + 6;
                 const maxY = lane.y + lane.height - node.height - 6;
-                newY = Math.max(minY, Math.min(maxY, nodeStartY + dy));
+                newY = Math.max(minY, Math.min(maxY, nodeStartY + rawDy));
               }
             }
 
@@ -428,6 +537,7 @@ export const DiagramCanvas: React.FC = () => {
       setMultiDragState(null);
     }
 
+    setSnapGuide(null);
     setIsPanning(false);
   }, [
     multiDragState,
@@ -940,9 +1050,40 @@ export const DiagramCanvas: React.FC = () => {
           <g>
             {layout.edges.map((edge) => {
               const isDragged = routeDrag?.edge.routeKey === edge.routeKey;
-              const displayEdge = isDragged
+              let displayEdge = isDragged
                 ? { ...edge, points: routeDrag.previewPoints, pathD: pointsToPath(routeDrag.previewPoints) }
                 : edge;
+
+              // If a connected node is being dragged, smoothly preview the edge in real time
+              if (
+                !isDragged &&
+                multiDragState &&
+                (multiDragState.currentOffsets.has(edge.fromInstanceId) ||
+                  multiDragState.currentOffsets.has(edge.toInstanceId))
+              ) {
+                const fromNode = layout.nodes.find((n) => n.instanceId === edge.fromInstanceId);
+                const toNode = layout.nodes.find((n) => n.instanceId === edge.toInstanceId);
+                if (fromNode && toNode) {
+                  const fromOff = multiDragState.currentOffsets.get(edge.fromInstanceId);
+                  const toOff = multiDragState.currentOffsets.get(edge.toInstanceId);
+                  const fromN = fromOff ? { ...fromNode, x: fromOff.x, y: fromOff.y } : fromNode;
+                  const toN = toOff ? { ...toNode, x: toOff.x, y: toOff.y } : toNode;
+                  const inferred = inferDefaultBorderSides(fromN, toN);
+                  const startSide = edge.sourceAnchor?.side || inferred.sourceSide;
+                  const endSide = edge.targetAnchor?.side || inferred.targetSide;
+                  const start = getNodeSidePort(fromN, startSide, 0, 1);
+                  const end = getNodeSidePort(toN, endSide, 0, 1);
+                  const pts = buildOrthogonalConnector(start, end, startSide, endSide);
+                  displayEdge = {
+                    ...edge,
+                    points: pts,
+                    pathD: pointsToPath(pts),
+                    labelX: (start.x + end.x) / 2,
+                    labelY: (start.y + end.y) / 2,
+                  };
+                }
+              }
+
               return (
                 <EdgeRenderer
                   key={edge.id}
@@ -995,6 +1136,69 @@ export const DiagramCanvas: React.FC = () => {
               );
             })}
           </g>
+
+          {/* Alignment Snap Guidelines when dragging with purpose */}
+          {snapGuide && (
+            <g className="pointer-events-none transition-opacity duration-150">
+              {snapGuide.type === 'vertical' ? (
+                <g>
+                  {/* Subtle luminous glow line */}
+                  <line
+                    x1={snapGuide.pos}
+                    y1={snapGuide.start}
+                    x2={snapGuide.pos}
+                    y2={snapGuide.end}
+                    stroke="#0284C7"
+                    strokeWidth={4}
+                    strokeOpacity={0.25}
+                  />
+                  {/* Crisp dashed center line */}
+                  <line
+                    x1={snapGuide.pos}
+                    y1={snapGuide.start}
+                    x2={snapGuide.pos}
+                    y2={snapGuide.end}
+                    stroke="#38BDF8"
+                    strokeWidth={1.5}
+                    strokeDasharray="5 3"
+                  />
+                  {/* Anchor dots */}
+                  <circle cx={snapGuide.pos} cy={snapGuide.start + 14} r={3.5} fill="#0284C7" stroke="#38BDF8" strokeWidth={1.5} />
+                  <circle cx={snapGuide.pos} cy={snapGuide.end - 14} r={3.5} fill="#0284C7" stroke="#38BDF8" strokeWidth={1.5} />
+                  {/* Alignment badge */}
+                  <g transform={`translate(${snapGuide.pos + 8}, ${(snapGuide.start + snapGuide.end) / 2 - 10})`}>
+                    <rect x="0" y="0" width="84" height="20" rx="4" fill="#0F172A" stroke="#38BDF8" strokeWidth={1} fillOpacity={0.9} />
+                    <text x="6" y="14" fontSize="10" fontWeight="600" fill="#38BDF8" fontFamily="system-ui, sans-serif">
+                      ✓ Thẳng hàng
+                    </text>
+                  </g>
+                </g>
+              ) : (
+                <g>
+                  <line
+                    x1={snapGuide.start}
+                    y1={snapGuide.pos}
+                    x2={snapGuide.end}
+                    y2={snapGuide.pos}
+                    stroke="#0284C7"
+                    strokeWidth={4}
+                    strokeOpacity={0.25}
+                  />
+                  <line
+                    x1={snapGuide.start}
+                    y1={snapGuide.pos}
+                    x2={snapGuide.end}
+                    y2={snapGuide.pos}
+                    stroke="#38BDF8"
+                    strokeWidth={1.5}
+                    strokeDasharray="5 3"
+                  />
+                  <circle cx={snapGuide.start + 14} cy={snapGuide.pos} r={3.5} fill="#0284C7" stroke="#38BDF8" strokeWidth={1.5} />
+                  <circle cx={snapGuide.end - 14} cy={snapGuide.pos} r={3.5} fill="#0284C7" stroke="#38BDF8" strokeWidth={1.5} />
+                </g>
+              )}
+            </g>
+          )}
 
           {/* Layer 5: Manual route handles for the edge being edited */}
           {routeEditEdge && (

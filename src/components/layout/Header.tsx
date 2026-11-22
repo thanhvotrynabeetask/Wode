@@ -1,11 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Save, Settings, FolderOpen, FilePlus, Download, Upload, ChevronDown, LogOut, Layers } from 'lucide-react';
+import { Save, Settings, FolderOpen, FilePlus, Download, Upload, ChevronDown, LogOut, Layers, Bot } from 'lucide-react';
 import { useProjectStore, syncActiveDiagramToDiagrams } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { Button } from '../common/Button';
 import { ExitFlowDialog } from '../common/ExitFlowDialog';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { MCPStatusModal } from '../common/MCPStatusModal';
+import { useMCPLiveSync } from '../../hooks/useMCPLiveSync';
 import { FileSystemService } from '../../services/FileSystemService';
 import { ExportService, ExportOptions } from '../../services/ExportService';
 import { ImportService } from '../../services/ImportService';
@@ -17,6 +19,7 @@ export const Header: React.FC = () => {
   const { schema, isDirty, setProjectName, loadSchema, appendDiagramFromFile, newProject, markClean } = useProjectStore();
   const { openSettings, addToast } = useUIStore();
   const workspacePath = useSettingsStore((s) => s.workspacePath);
+  const { isConnected: isMCPConnected } = useMCPLiveSync();
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(schema.metadata.project_name);
@@ -24,6 +27,7 @@ export const Header: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showOpenMenu, setShowOpenMenu] = useState(false);
+  const [showMCPModal, setShowMCPModal] = useState(false);
   const openModeRef = useRef<'replace' | 'append'>('replace');
 
   // Dialog states for exit / reset flow
@@ -378,6 +382,18 @@ export const Header: React.FC = () => {
 
         <div className="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-1" />
 
+        {/* MCP Agent Connector Status */}
+        <Button
+          variant={isMCPConnected ? 'primary' : 'ghost'}
+          size="sm"
+          icon={<Bot size={15} className={isMCPConnected ? 'text-emerald-300 animate-pulse' : 'text-gray-400'} />}
+          onClick={() => setShowMCPModal(true)}
+          title={isMCPConnected ? 'MCP Agent Connected (Live Sync đang bật)' : 'MCP Connector (Click để xem cấu hình cho Agent)'}
+          className={isMCPConnected ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-medium' : 'text-gray-600 dark:text-slate-300'}
+        >
+          <span className="hidden sm:inline">MCP</span>
+        </Button>
+
         <Button
           variant="ghost"
           size="sm"
@@ -451,6 +467,13 @@ export const Header: React.FC = () => {
           onCancel={() => setShowCleanExitConfirm(false)}
         />
       )}
+
+      {/* MCP Connector Info Modal */}
+      <MCPStatusModal
+        isOpen={showMCPModal}
+        onClose={() => setShowMCPModal(false)}
+        isConnected={isMCPConnected}
+      />
     </>
   );
 };

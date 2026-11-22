@@ -86,19 +86,19 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Tùy Chỉnh Luồng Dữ Liệu (Message Flow)" size="md">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Source -> Target Info */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600 flex items-center justify-between">
-          <span className="font-semibold text-gray-800 truncate max-w-[42%]" title={fromNodeTitle}>
+        <div className="bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700/80 rounded-lg p-2.5 text-xs text-gray-600 dark:text-slate-300 flex items-center justify-between">
+          <span className="font-semibold text-gray-800 dark:text-slate-200 truncate max-w-[42%]" title={fromNodeTitle}>
             {fromNodeTitle}
           </span>
-          <span className="text-gray-400">⟶</span>
-          <span className="font-semibold text-gray-800 truncate max-w-[42%]" title={toNodeTitle}>
+          <span className="text-gray-400 dark:text-slate-500">⟶</span>
+          <span className="font-semibold text-gray-800 dark:text-slate-200 truncate max-w-[42%]" title={toNodeTitle}>
             {toNodeTitle}
           </span>
         </div>
 
         {/* Flow Name / Message Label */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
             Tên luồng / Thông điệp
           </label>
           <input
@@ -107,15 +107,15 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
             placeholder="Ví dụ: Gửi payload JSON, Xác nhận token..."
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
           />
         </div>
 
         {/* Border Touch Points (Vị trí 2 đầu tiếp xúc viền) */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-3">
+        <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-xl p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Crosshair size={14} className="text-blue-600" />
+            <label className="text-xs font-semibold text-gray-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+              <Crosshair size={14} className="text-blue-600 dark:text-blue-400" />
               Điểm chạm trên viền Node (Endpoints)
             </label>
             {onEditRoute && (
@@ -125,7 +125,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                   onEditRoute();
                   onClose();
                 }}
-                className="text-xs text-blue-600 hover:underline font-semibold flex items-center gap-1"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
               >
                 Kéo trực quan trên Canvas
                 <ArrowRight size={12} />
@@ -136,8 +136,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
           <div className="grid grid-cols-2 gap-3 text-xs">
             {/* Source touch point */}
             <div>
-              <p className="font-medium text-gray-600 mb-1.5 truncate" title={`Node nguồn: ${fromNodeTitle}`}>
-                Đầu ra: <span className="font-semibold text-blue-600">{fromNodeTitle}</span>
+              <p className="font-medium text-gray-600 dark:text-slate-400 mb-1.5 truncate" title={`Node nguồn: ${fromNodeTitle}`}>
+                Đầu ra: <span className="font-semibold text-blue-600 dark:text-blue-400">{fromNodeTitle}</span>
               </p>
               <div className="grid grid-cols-2 gap-1.5">
                 {BORDER_SIDES.map((b) => (
@@ -147,8 +147,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                     onClick={() => setSourceSide(b.side)}
                     className={`py-1.5 px-2 rounded-lg border text-[11px] font-medium transition-colors ${
                       sourceSide === b.side
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold shadow-xs'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-100 bg-white'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold shadow-xs'
+                        : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-800'
                     }`}
                   >
                     {b.label}
@@ -159,8 +159,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
 
             {/* Target touch point */}
             <div>
-              <p className="font-medium text-gray-600 mb-1.5 truncate" title={`Node đích: ${toNodeTitle}`}>
-                Đầu vào: <span className="font-semibold text-red-600">{toNodeTitle}</span>
+              <p className="font-medium text-gray-600 dark:text-slate-400 mb-1.5 truncate" title={`Node đích: ${toNodeTitle}`}>
+                Đầu vào: <span className="font-semibold text-red-600 dark:text-red-400">{toNodeTitle}</span>
               </p>
               <div className="grid grid-cols-2 gap-1.5">
                 {BORDER_SIDES.map((b) => (
@@ -170,8 +170,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                     onClick={() => setTargetSide(b.side)}
                     className={`py-1.5 px-2 rounded-lg border text-[11px] font-medium transition-colors ${
                       targetSide === b.side
-                        ? 'border-red-500 bg-red-50 text-red-700 font-semibold shadow-xs'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-100 bg-white'
+                        ? 'border-red-500 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 font-semibold shadow-xs'
+                        : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-800'
                     }`}
                   >
                     {b.label}
@@ -180,14 +180,14 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               </div>
             </div>
           </div>
-          <p className="text-[11px] text-gray-500 leading-relaxed italic">
+          <p className="text-[11px] text-gray-500 dark:text-slate-400 leading-relaxed italic">
             * Mỗi Node có 4 cạnh (ở giữa). Nếu có nhiều luồng cùng nối vào 1 cạnh, hệ thống sẽ tự động xếp đều nằm giữa để tránh đè lấn.
           </p>
         </div>
 
         {/* Flow Stroke Style */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
             Kiểu nét vẽ (Line Style)
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -196,8 +196,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               onClick={() => setFlowType('solid')}
               className={`py-2 px-2 rounded-lg border text-xs font-medium text-center transition-colors ${
                 flowType === 'solid'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold'
+                  : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               <div className="w-8 h-0.5 bg-current mx-auto mb-1" />
@@ -208,8 +208,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               onClick={() => setFlowType('dashed')}
               className={`py-2 px-2 rounded-lg border text-xs font-medium text-center transition-colors ${
                 flowType === 'dashed'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold'
+                  : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               <div className="w-8 h-0.5 border-t-2 border-dashed border-current mx-auto mb-1" />
@@ -220,8 +220,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               onClick={() => setFlowType('dotted')}
               className={`py-2 px-2 rounded-lg border text-xs font-medium text-center transition-colors ${
                 flowType === 'dotted'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold'
+                  : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               <div className="w-8 h-0.5 border-t-2 border-dotted border-current mx-auto mb-1" />
@@ -232,8 +232,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
 
         {/* Flow Color */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-            <Palette size={13} className="text-gray-500" />
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <Palette size={13} className="text-gray-500 dark:text-slate-400" />
             Màu sắc luồng
           </label>
           <div className="flex flex-wrap gap-2.5 mb-2">
@@ -244,7 +244,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                 onClick={() => setColor(c)}
                 className={`w-6 h-6 rounded-full transition-transform ${
                   color.toLowerCase() === c.toLowerCase()
-                    ? 'scale-125 ring-2 ring-offset-2 ring-blue-500 shadow-sm'
+                    ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 ring-blue-500 shadow-sm'
                     : 'hover:scale-110'
                 }`}
                 style={{ backgroundColor: c }}
@@ -256,17 +256,17 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
-              className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+              className="w-7 h-7 rounded border border-gray-300 dark:border-slate-700 bg-transparent cursor-pointer"
             />
-            <span className="text-xs font-mono text-gray-500 uppercase">{color}</span>
+            <span className="text-xs font-mono text-gray-500 dark:text-slate-400 uppercase">{color}</span>
           </div>
         </div>
 
         {/* Manual routing button */}
         {onEditRoute && (
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Route size={13} className="text-gray-500" />
+            <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Route size={13} className="text-gray-500 dark:text-slate-400" />
               Định tuyến trên Canvas
             </label>
             <div className="flex items-center gap-2">
@@ -276,7 +276,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                   onEditRoute();
                   onClose();
                 }}
-                className="flex-1 text-xs font-medium border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg px-3 py-2 transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 text-xs font-medium border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 rounded-lg px-3 py-2 transition-colors flex items-center justify-center gap-1.5"
               >
                 <Crosshair size={13} />
                 Kéo trực quan điểm chạm & đường nối trên Canvas
@@ -288,7 +288,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                     onResetRoute();
                     onClose();
                   }}
-                  className="text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
+                  className="text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg px-3 py-2 transition-colors"
                 >
                   Tự động lại
                 </button>
@@ -298,7 +298,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
         )}
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-slate-800">
           {onDelete ? (
             <button
               type="button"
@@ -306,7 +306,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                 onDelete();
                 onClose();
               }}
-              className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1 p-1 hover:bg-red-50 rounded"
+              className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1 p-1 hover:bg-red-50 dark:hover:bg-red-950/40 rounded"
             >
               <Trash2 size={13} />
               Xóa luồng

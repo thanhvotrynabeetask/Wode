@@ -120,7 +120,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
                   if (e.key === 'Enter') handleSaveLabel();
                   if (e.key === 'Escape') setEditingLabel(false);
                 }}
-                className="w-full text-xs border border-blue-400 rounded px-1.5 py-0.5 outline-none"
+                className="w-full text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-blue-400 rounded px-1.5 py-0.5 outline-none"
               />
               <button onClick={handleSaveLabel} className="text-green-600 hover:text-green-700 p-0.5">
                 <Check size={12} />
@@ -250,10 +250,10 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
             <select
               value={newListingType}
               onChange={(e) => setNewListingType(e.target.value as ListingItemType)}
-              className="text-[10px] border border-gray-200 rounded px-1 py-0.5 outline-none bg-white max-w-[90px]"
+              className="text-[10px] border border-gray-200 dark:border-slate-700 rounded px-1 py-0.5 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 max-w-[90px]"
             >
               {LISTING_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
+                <option key={t.value} value={t.value} className="bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100">
                   {LISTING_ITEM_SYMBOLS[t.value].icon} {t.label}
                 </option>
               ))}
@@ -266,12 +266,12 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleAddListing();
               }}
-              className="flex-1 text-[10px] border border-gray-200 rounded px-1.5 py-0.5 outline-none bg-white"
+              className="flex-1 text-[10px] border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500"
             />
             <button
               onClick={handleAddListing}
               disabled={!newListingName.trim()}
-              className="p-1 text-green-600 hover:bg-green-50 disabled:opacity-30 rounded transition-colors"
+              className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40 disabled:opacity-30 rounded transition-colors"
               title="Thêm"
             >
               <Plus size={12} />

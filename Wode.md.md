@@ -210,3 +210,25 @@ Xây dựng một ứng dụng web chạy **100% Offline (Local-first)** trên m
   * Tích hợp tab *Phím Tắt & Điều Khiển* trong Cài Đặt.
   * Cho phép người dùng click vào phím tắt bất kỳ và bấm tổ hợp phím mới trên bàn phím để gán lại theo thói quen cá nhân. Có nút khôi phục về mặc định.
 
+### 6.6. AI Agent MCP Connector & Live Sync Server (Mới Hoàn Thiện)
+* [x] **1. Wode MCP Server Chuẩn Model Context Protocol:**
+  * Đóng gói server MCP độc lập trong thư mục `mcp-server/` sử dụng `@modelcontextprotocol/sdk` chính thức.
+  * Cung cấp 11 công cụ mạnh mẽ: `wode_create_diagram` (vẽ 1 bước), `wode_get_diagram`, `wode_list_diagrams`, `wode_add_role`, `wode_add_frame`, `wode_add_node`, `wode_connect_nodes`, `wode_update_node`, `wode_delete_node`, `wode_export_html`, `wode_validate_diagram`.
+* [x] **2. Cơ Chế Live Sync Thời Gian Thực (WebSocket `ws://localhost:3333`):**
+  * Tích hợp hook `useMCPLiveSync` trong ứng dụng Wode React.
+  * Bất cứ khi nào Agent ra lệnh vẽ sơ đồ qua MCP, canvas web sẽ tự động nhận diện và cập nhật ngay lập tức mà không cần bấm mở file thủ công.
+* [x] **3. Nút Điều Khiển & Modal Hướng Dẫn Trong Header:**
+  * Bổ sung nút bấm trạng thái MCP trên Header kèm đèn hiệu hoạt động.
+  * Hộp thoại hiển thị cấu hình JSON mẫu cho Claude Desktop, Cursor và Antigravity.
+
+### 6.7. Auto-Alignment & Smart Straight Flow Routing (Mới Hoàn Thiện)
+* [x] **1. Cơ Chế Tự Động Align Khi Kéo Thả (Snap-to-Align):**
+  * Tự động phát hiện và hít (snap) các node theo trục tâm (Center-to-Center), lề trái (Left) hoặc lề phải (Right) với các node ở trên/dưới bất kể cùng hay khác làn bơi (ngưỡng snap 15px).
+  * Hiển thị đường gióng căn chỉnh nét đứt phát sáng (Luminous Alignment Guideline) kèm huy hiệu `✓ Thẳng hàng` trực quan trên Canvas khi người dùng kéo thả có chủ đích.
+* [x] **2. Triệt Tiêu Lỗi Dây Nối Méo Mó / Gãy Khúc (Smart Straight Flow):**
+  * Tự động phát hiện hai node xếp thẳng hàng dọc hoặc ngang và triệt tiêu hoàn toàn hiện tượng uốn cong chữ S (S-curve) hay zigzag do lượng tử hóa lưới grid.
+  * Tự động suy diễn hướng cổng nối (`bottom -> top` khi hai node xếp trên/dưới) và render đường dây thẳng tuyệt đối 100% (`M x y1 L x y2`).
+  * Xem trước đường dây nối thẳng mượt mà ngay trong lúc đang giữ chuột kéo node.
+
+
+
