@@ -20,12 +20,13 @@ export const RolePalette: React.FC = () => {
     addNodeTemplate,
     updateNodeTemplate,
     removeNodeTemplate,
+    duplicateNodeTemplate,
     addNodeToFrame,
-    addFrame,
+    addStandaloneNode,
     getUsageCount,
   } = useProjectStore();
 
-  const { selection, setSelectedFrame, addToast } = useUIStore();
+  const { selection, addToast } = useUIStore();
 
   const [search, setSearch] = useState('');
   const [roleModalOpen, setRoleModalOpen] = useState(false);
@@ -42,21 +43,26 @@ export const RolePalette: React.FC = () => {
     name: string;
   } | null>(null);
 
-  // Active frame for quick add
-  const activeFrame = schema.frames.find((f) => f.frame_id === selection.selectedFrameId) || schema.frames[0];
+  // Active frame for quick add (null if no frames exist)
+  const activeFrame = schema.frames.length > 0
+    ? (schema.frames.find((f) => f.frame_id === selection.selectedFrameId) || schema.frames[0])
+    : null;
 
   const handleAddNodeToFrame = (baseId: string) => {
-    let targetFrame = activeFrame;
-    if (!targetFrame) {
-      // If no frames yet, create one automatically
-      addFrame('Giai đoạn 1');
-      const updatedFrames = useProjectStore.getState().schema.frames;
-      targetFrame = updatedFrames[0];
-      if (targetFrame) setSelectedFrame(targetFrame.frame_id);
+    if (schema.frames.length > 0 && activeFrame) {
+      addNodeToFrame(activeFrame.frame_id, baseId);
+      addToast('success', `Đã thêm vào khung: ${activeFrame.title}`);
+    } else {
+      addStandaloneNode(baseId);
+      const tpl = schema.node_palette.find((t) => t.base_id === baseId);
+      addToast('success', `Đã thêm nhiệm vụ: ${tpl?.title || 'Node mới'}`);
     }
-    if (targetFrame) {
-      addNodeToFrame(targetFrame.frame_id, baseId);
-      addToast('success', `Đã thêm vào khung: ${targetFrame.title}`);
+  };
+
+  const handleDuplicateTemplate = (tpl: NodeTemplate) => {
+    const dup = duplicateNodeTemplate(tpl.base_id, activeFrame?.frame_id);
+    if (dup) {
+      addToast('success', `Đã nhân bản độc lập: "${dup.title}"`);
     }
   };
 
@@ -159,6 +165,7 @@ export const RolePalette: React.FC = () => {
         setTemplateModalOpen(true);
       }}
       onDeleteTemplate={requestDeleteTemplate}
+      onDuplicateTemplate={handleDuplicateTemplate}
       onAddNodeToFrame={handleAddNodeToFrame}
       activeFrameTitle={activeFrame?.title}
     />
@@ -270,6 +277,7 @@ export const RolePalette: React.FC = () => {
                 setTemplateModalOpen(true);
               }}
               onDeleteTemplate={requestDeleteTemplate}
+              onDuplicateTemplate={handleDuplicateTemplate}
               onAddNodeToFrame={handleAddNodeToFrame}
               activeFrameTitle={activeFrame?.title}
             />

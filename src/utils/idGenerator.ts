@@ -21,3 +21,14 @@ export function generateNodeId(): string {
 export function generateDiagramId(): string {
   return generateId('diag');
 }
+
+export function generateDuplicateTitle(baseTitle: string, existingTitles: string[]): string {
+  const cleanTitle = baseTitle.replace(/\s*\(Bản sao(\s+\d+)?\)$/, '').trim();
+  let counter = 1;
+  let candidate = `${cleanTitle} (Bản sao)`;
+  while (existingTitles.includes(candidate)) {
+    counter++;
+    candidate = `${cleanTitle} (Bản sao ${counter})`;
+  }
+  return candidate;
+}

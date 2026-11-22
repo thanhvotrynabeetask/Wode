@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { ProjectSchema, Role, NodeTemplate, Frame, NodeInstance, EdgeConfig, NodeBorderAnchor, EdgeRoute, DiagramSection } from '../types/schema';
 
-import { generateRoleId, generateNodeId, generateFrameId, generateInstanceId, generateDiagramId } from '../utils/idGenerator';
+import { generateRoleId, generateNodeId, generateFrameId, generateInstanceId, generateDiagramId, generateDuplicateTitle } from '../utils/idGenerator';
 import { formatISOTimestamp } from '../utils/dateFormat';
 import { APP_VERSION } from '../utils/constants';
 
@@ -35,6 +35,7 @@ interface ProjectState {
   addNodeTemplate: (template: Omit<NodeTemplate, 'base_id'>) => void;
   updateNodeTemplate: (baseId: string, updates: Partial<Omit<NodeTemplate, 'base_id'>>) => void;
   removeNodeTemplate: (baseId: string) => void;
+  duplicateNodeTemplate: (baseId: string, targetFrameId?: string) => NodeTemplate | null;
 
   // Frames
   addFrame: (title: string) => void;
@@ -90,23 +91,23 @@ interface ProjectState {
   updateDiagramTitle: (diagramId: string, title: string) => void;
   setActiveDiagram: (diagramId: string) => void;
 
+  // Standalone / Frameless nodes & edges
+  addStandaloneNode: (baseId: string) => string;
+  removeStandaloneNode: (instanceId: string) => void;
+  updateStandaloneEdge: (fromInstance: string, toInstance: string, updates: Partial<EdgeConfig>) => void;
+
   // Computed
   getUsageCount: (baseId: string) => number;
 }
 
 const createEmptySchema = (): ProjectSchema => {
-  const initialFrame: Frame = {
-    frame_id: 'frame_1',
-    title: 'Giai đoạn 1',
-    order: 1,
-    nodes: [],
-    edges_config: [],
-  };
   const initialDiagram: DiagramSection = {
     id: 'diag_1',
     title: 'Sơ đồ 1',
     order: 1,
-    frames: [initialFrame],
+    frames: [],
+    nodes: [],
+    edges_config: [],
     edge_routes: {},
   };
   return {
@@ -121,7 +122,9 @@ const createEmptySchema = (): ProjectSchema => {
     },
     roles: [],
     node_palette: [],
-    frames: [initialFrame],
+    frames: [],
+    nodes: [],
+    edges_config: [],
     diagrams: [initialDiagram],
     active_diagram_id: 'diag_1',
   };
@@ -140,6 +143,8 @@ export function syncActiveDiagramToDiagrams(schema: ProjectSchema): DiagramSecti
             roles: schema.roles || [],
             node_palette: schema.node_palette || [],
             frames: schema.frames || [],
+            nodes: schema.nodes || [],
+            edges_config: schema.edges_config || [],
             edge_routes: schema.edge_routes || {},
           },
         ];
@@ -150,7 +155,9 @@ export function syncActiveDiagramToDiagrams(schema: ProjectSchema): DiagramSecti
         ...diag,
         roles: schema.roles || [],
         node_palette: schema.node_palette || [],
-        frames: schema.frames,
+        frames: schema.frames || [],
+        nodes: schema.nodes || [],
+        edges_config: schema.edges_config || [],
         edge_routes: schema.edge_routes || {},
       };
     }
@@ -159,6 +166,8 @@ export function syncActiveDiagramToDiagrams(schema: ProjectSchema): DiagramSecti
       roles: diag.roles || [],
       node_palette: diag.node_palette || [],
       frames: diag.frames || [],
+      nodes: diag.nodes || [],
+      edges_config: diag.edges_config || [],
       edge_routes: diag.edge_routes || {},
     };
   });
@@ -168,6 +177,8 @@ export function updateActiveDiagramInSchema(
   schema: ProjectSchema,
   updates: {
     frames?: Frame[];
+    nodes?: NodeInstance[];
+    edges_config?: EdgeConfig[];
     roles?: Role[];
     node_palette?: NodeTemplate[];
     edge_routes?: Record<string, EdgeRoute>;
@@ -185,6 +196,8 @@ export function updateActiveDiagramInSchema(
             roles: schema.roles || [],
             node_palette: schema.node_palette || [],
             frames: schema.frames || [],
+            nodes: schema.nodes || [],
+            edges_config: schema.edges_config || [],
             edge_routes: schema.edge_routes || {},
           },
         ];
@@ -194,6 +207,8 @@ export function updateActiveDiagramInSchema(
       return {
         ...d,
         ...(updates.frames !== undefined ? { frames: updates.frames } : {}),
+        ...(updates.nodes !== undefined ? { nodes: updates.nodes } : {}),
+        ...(updates.edges_config !== undefined ? { edges_config: updates.edges_config } : {}),
         ...(updates.roles !== undefined ? { roles: updates.roles } : {}),
         ...(updates.node_palette !== undefined ? { node_palette: updates.node_palette } : {}),
         ...(updates.edge_routes !== undefined ? { edge_routes: updates.edge_routes } : {}),
@@ -534,10 +549,37 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   updateNodeTemplate: (baseId, updates) =>
     set((s) => {
       const updatedPalette = s.schema.node_palette.map((n) => (n.base_id === baseId ? { ...n, ...updates } : n));
+      const updatedFrames = s.schema.frames.map((f) => ({
+        ...f,
+        nodes: f.nodes.map((n) =>
+          n.base_id === baseId
+            ? {
+                ...n,
+                ...(updates.title ? { title: updates.title } : {}),
+                ...(updates.role_id ? { assigned_role_id: updates.role_id } : {}),
+                ...(updates.node_kind ? { node_kind: updates.node_kind } : {}),
+              }
+            : n
+        ),
+      }));
+      const updatedNodes = (s.schema.nodes || []).map((n) =>
+        n.base_id === baseId
+          ? {
+              ...n,
+              ...(updates.title ? { title: updates.title } : {}),
+              ...(updates.role_id ? { assigned_role_id: updates.role_id } : {}),
+              ...(updates.node_kind ? { node_kind: updates.node_kind } : {}),
+            }
+          : n
+      );
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { node_palette: updatedPalette }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          node_palette: updatedPalette,
+          frames: updatedFrames,
+          nodes: updatedNodes,
+        }),
         isDirty: true,
       };
     }),
@@ -545,29 +587,109 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   removeNodeTemplate: (baseId) =>
     set((s) => {
       const updatedPalette = s.schema.node_palette.filter((n) => n.base_id !== baseId);
+      const updatedFrames = s.schema.frames.map((f) => ({
+        ...f,
+        nodes: f.nodes.filter((n) => n.base_id !== baseId),
+      }));
+      const updatedNodes = (s.schema.nodes || []).filter((n) => n.base_id !== baseId);
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { node_palette: updatedPalette }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          node_palette: updatedPalette,
+          frames: updatedFrames,
+          nodes: updatedNodes,
+        }),
         isDirty: true,
       };
     }),
 
+  duplicateNodeTemplate: (baseId, targetFrameId) => {
+    let createdTemplate: NodeTemplate | null = null;
+    set((s) => {
+      const source = s.schema.node_palette.find((n) => n.base_id === baseId);
+      if (!source) return s;
+
+      const newBaseId = generateNodeId();
+      const existingTitles = s.schema.node_palette.map((t) => t.title);
+      const newTitle = generateDuplicateTitle(source.title, existingTitles);
+
+      const newTemplate: NodeTemplate = {
+        base_id: newBaseId,
+        title: newTitle,
+        role_id: source.role_id,
+        color: source.color,
+        corner_symbol: source.corner_symbol,
+        node_kind: source.node_kind,
+      };
+      createdTemplate = newTemplate;
+
+      const newInstance: NodeInstance = {
+        instance_id: generateInstanceId(newBaseId),
+        base_id: newBaseId,
+        title: newTitle,
+        custom_label: null,
+        node_kind: newTemplate.node_kind || 'standard',
+        assigned_role_id: newTemplate.role_id,
+      };
+
+      const updatedPalette = [...s.schema.node_palette, newTemplate];
+
+      let updatedFrames = s.schema.frames;
+      let updatedNodes = s.schema.nodes || [];
+
+      if (s.schema.frames.length > 0) {
+        const frameId =
+          targetFrameId ||
+          (s.schema.frames.find((f) => f.frame_id === targetFrameId)?.frame_id) ||
+          s.schema.frames[0].frame_id;
+        updatedFrames = s.schema.frames.map((f) =>
+          f.frame_id === frameId ? { ...f, nodes: [...f.nodes, newInstance] } : f
+        );
+      } else {
+        updatedNodes = [...updatedNodes, newInstance];
+      }
+
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, {
+          node_palette: updatedPalette,
+          frames: updatedFrames,
+          nodes: updatedNodes,
+        }),
+        isDirty: true,
+      };
+    });
+    return createdTemplate;
+  },
+
   addFrame: (title) =>
     set((s) => {
+      const isFirstFrame = s.schema.frames.length === 0;
+      const initialNodes =
+        isFirstFrame && (s.schema.nodes || []).length > 0 ? [...(s.schema.nodes || [])] : [];
+      const initialEdges =
+        isFirstFrame && (s.schema.edges_config || []).length > 0
+          ? [...(s.schema.edges_config || [])]
+          : [];
       const newFrame: Frame = {
         frame_id: generateFrameId(),
         title,
         order: s.schema.frames.length + 1,
-        nodes: [],
-        edges_config: [],
+        nodes: initialNodes,
+        edges_config: initialEdges,
         next_frame_target: null,
       };
       const updatedFrames = [...s.schema.frames, newFrame];
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          frames: updatedFrames,
+          nodes: isFirstFrame ? [] : s.schema.nodes,
+          edges_config: isFirstFrame ? [] : s.schema.edges_config,
+        }),
         isDirty: true,
       };
     }),
@@ -585,13 +707,30 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
 
   removeFrame: (frameId) =>
     set((s) => {
+      const frameToRemove = s.schema.frames.find((f) => f.frame_id === frameId);
       const updatedFrames = s.schema.frames
         .filter((f) => f.frame_id !== frameId)
         .map((f, i) => ({ ...f, order: i + 1 }));
+
+      // If all frames were removed, preserve the nodes as standalone nodes
+      const newStandaloneNodes =
+        updatedFrames.length === 0 && frameToRemove
+          ? [...(s.schema.nodes || []), ...frameToRemove.nodes]
+          : s.schema.nodes || [];
+
+      const newStandaloneEdges =
+        updatedFrames.length === 0 && frameToRemove
+          ? [...(s.schema.edges_config || []), ...(frameToRemove.edges_config || [])]
+          : s.schema.edges_config || [];
+
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          frames: updatedFrames,
+          nodes: newStandaloneNodes,
+          edges_config: newStandaloneEdges,
+        }),
         isDirty: true,
       };
     }),
@@ -625,6 +764,15 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         node_kind: template.node_kind || 'standard',
         assigned_role_id: template.role_id,
       };
+      if (!frameId || s.schema.frames.length === 0) {
+        const updatedNodes = [...(s.schema.nodes || []), instance];
+        return {
+          past: pushHistory(s.past, s.schema),
+          future: [],
+          schema: updateActiveDiagramInSchema(s.schema, { nodes: updatedNodes }),
+          isDirty: true,
+        };
+      }
       const updatedFrames = s.schema.frames.map((f) =>
         f.frame_id === frameId ? { ...f, nodes: [...f.nodes, instance] } : f
       );
@@ -639,14 +787,80 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   removeNodeFromFrame: (frameId, instanceId) =>
     set((s) => {
       const updatedFrames = s.schema.frames.map((f) =>
-        f.frame_id === frameId
+        !frameId || f.frame_id === frameId
           ? { ...f, nodes: f.nodes.filter((n) => n.instance_id !== instanceId) }
           : f
+      );
+      const updatedNodes = (s.schema.nodes || []).filter((n) => n.instance_id !== instanceId);
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames, nodes: updatedNodes }),
+        isDirty: true,
+      };
+    }),
+
+  addStandaloneNode: (baseId) => {
+    let newInstanceId = '';
+    set((s) => {
+      const template = s.schema.node_palette.find((n) => n.base_id === baseId);
+      if (!template) return s;
+      newInstanceId = generateInstanceId(baseId);
+      const instance: NodeInstance = {
+        instance_id: newInstanceId,
+        base_id: baseId,
+        title: template.title,
+        custom_label: null,
+        node_kind: template.node_kind || 'standard',
+        assigned_role_id: template.role_id,
+      };
+      const updatedNodes = [...(s.schema.nodes || []), instance];
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { nodes: updatedNodes }),
+        isDirty: true,
+      };
+    });
+    return newInstanceId;
+  },
+
+  removeStandaloneNode: (instanceId) =>
+    set((s) => {
+      const updatedNodes = (s.schema.nodes || []).filter((n) => n.instance_id !== instanceId);
+      const updatedEdges = (s.schema.edges_config || []).filter(
+        (e) => e.from_instance !== instanceId && e.to_instance !== instanceId
       );
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        schema: updateActiveDiagramInSchema(s.schema, { nodes: updatedNodes, edges_config: updatedEdges }),
+        isDirty: true,
+      };
+    }),
+
+  updateStandaloneEdge: (fromInstance, toInstance, updates) =>
+    set((s) => {
+      const edges = [...(s.schema.edges_config || [])];
+      const existingIdx = edges.findIndex(
+        (e) => e.from_instance === fromInstance && e.to_instance === toInstance
+      );
+      if (existingIdx >= 0) {
+        edges[existingIdx] = { ...edges[existingIdx], ...updates };
+      } else {
+        edges.push({
+          edge_id: `edge_${fromInstance}_${toInstance}`,
+          from_instance: fromInstance,
+          to_instance: toInstance,
+          message_label: updates.message_label || '',
+          flow_type: updates.flow_type || 'solid',
+          ...updates,
+        });
+      }
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { edges_config: edges }),
         isDirty: true,
       };
     }),
@@ -683,7 +897,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   updateNodeInstance: (frameId, instanceId, updates) =>
     set((s) => {
       const updatedFrames = s.schema.frames.map((f) =>
-        f.frame_id === frameId
+        !frameId || f.frame_id === frameId
           ? {
               ...f,
               nodes: f.nodes.map((n) =>
@@ -692,10 +906,16 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
             }
           : f
       );
+      const updatedNodes = (s.schema.nodes || []).map((n) =>
+        n.instance_id === instanceId ? { ...n, ...updates } : n
+      );
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          frames: updatedFrames,
+          nodes: updatedNodes,
+        }),
         isDirty: true,
       };
     }),
@@ -703,7 +923,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   updateNodePosition: (frameId, instanceId, customX, customY, assignedRoleId) =>
     set((s) => {
       const updatedFrames = s.schema.frames.map((f) => {
-        if (f.frame_id !== frameId) return f;
+        if (frameId && f.frame_id !== frameId) return f;
         return {
           ...f,
           nodes: f.nodes.map((n) => {
@@ -717,10 +937,22 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           }),
         };
       });
+      const updatedNodes = (s.schema.nodes || []).map((n) => {
+        if (n.instance_id !== instanceId) return n;
+        return {
+          ...n,
+          custom_x: customX,
+          ...(customY !== undefined ? { custom_y: customY } : {}),
+          ...(assignedRoleId ? { assigned_role_id: assignedRoleId } : {}),
+        };
+      });
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          frames: updatedFrames,
+          nodes: updatedNodes,
+        }),
         isDirty: true,
       };
     }),
@@ -741,10 +973,23 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           };
         }),
       }));
+      const updatedNodes = (s.schema.nodes || []).map((n) => {
+        const u = updateMap.get(n.instance_id);
+        if (!u) return n;
+        return {
+          ...n,
+          custom_x: u.customX,
+          ...(u.customY !== undefined ? { custom_y: u.customY } : {}),
+          ...(u.assignedRoleId ? { assigned_role_id: u.assignedRoleId } : {}),
+        };
+      });
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          frames: updatedFrames,
+          nodes: updatedNodes,
+        }),
         isDirty: true,
       };
     }),
@@ -967,21 +1212,15 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
     const newId = generateDiagramId();
     const newOrder = currentDiagrams.length + 1;
-    const initialFrame: Frame = {
-      frame_id: generateFrameId(),
-      title: 'Giai đoạn 1',
-      order: 1,
-      nodes: [],
-      edges_config: [],
-      next_frame_target: null,
-    };
     const newDiagram: DiagramSection = {
       id: newId,
       title: title?.trim() || `Sơ đồ ${newOrder}`,
       order: newOrder,
       roles: [], // Sơ đồ mới hoàn toàn: không nhân bản swimlane cũ
       node_palette: [], // Bảng mẫu mới trống hoàn toàn
-      frames: [initialFrame],
+      frames: [], // Frame là tùy chọn: mặc định không tạo sẵn frame
+      nodes: [],
+      edges_config: [],
       edge_routes: {},
     };
     const updatedDiagrams = [...currentDiagrams, newDiagram];
@@ -994,7 +1233,9 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         active_diagram_id: newId,
         roles: [],
         node_palette: [],
-        frames: newDiagram.frames,
+        frames: [],
+        nodes: [],
+        edges_config: [],
         edge_routes: {},
       },
       isDirty: true,
@@ -1247,6 +1488,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         roles: target.roles || [],
         node_palette: target.node_palette || [],
         frames: target.frames || [],
+        nodes: target.nodes || [],
+        edges_config: target.edges_config || [],
         edge_routes: target.edge_routes || {},
       },
     });
@@ -1254,9 +1497,11 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
 
   getUsageCount: (baseId) => {
     const { schema } = get();
-    return schema.frames.reduce(
+    const frameCount = schema.frames.reduce(
       (count, frame) => count + frame.nodes.filter((n) => n.base_id === baseId).length,
       0
     );
+    const standaloneCount = (schema.nodes || []).filter((n) => n.base_id === baseId).length;
+    return frameCount + standaloneCount;
   },
 }));

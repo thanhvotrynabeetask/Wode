@@ -5,6 +5,7 @@ import { NodeTemplate, Role, CornerSymbol, NodeKind } from '../../types/schema';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
 import { Database, UserCheck, ArrowLeftRight } from 'lucide-react';
 import { NODE_KIND_META } from '../../utils/nodeKind';
+import { CANVAS_DEFAULTS } from '../../utils/constants';
 
 interface NodeTemplateEditorModalProps {
   isOpen: boolean;
@@ -140,14 +141,34 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
 
         {/* Title */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-            Tiêu đề nhiệm vụ
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+              Tiêu đề nhiệm vụ
+            </label>
+            <span
+              className={`text-[10px] ${
+                title.length >= CANVAS_DEFAULTS.MAX_NODE_TITLE_LENGTH
+                  ? 'text-red-500 font-bold'
+                  : title.length >= 40
+                  ? 'text-amber-500 font-semibold'
+                  : 'text-gray-400 dark:text-slate-500'
+              }`}
+            >
+              {title.length}/{CANVAS_DEFAULTS.MAX_NODE_TITLE_LENGTH} ký tự (tối đa 2 dòng)
+            </span>
+          </div>
           <input
             type="text"
             required
             autoFocus
-            placeholder={nodeKind === 'storage' ? 'Ví dụ: Redis Cache, PostgreSQL DB...' : nodeKind === 'mediator' ? 'Ví dụ: Message Queue, API Gateway, Webhook...' : 'Ví dụ: Tạo đơn hàng, Duyệt thanh toán...'}
+            maxLength={CANVAS_DEFAULTS.MAX_NODE_TITLE_LENGTH}
+            placeholder={
+              nodeKind === 'storage'
+                ? 'Ví dụ: Redis Cache, PostgreSQL DB...'
+                : nodeKind === 'mediator'
+                ? 'Ví dụ: Message Queue, API Gateway, Webhook...'
+                : 'Ví dụ: Tạo đơn hàng, Duyệt thanh toán...'
+            }
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"

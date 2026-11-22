@@ -175,7 +175,7 @@ export class ExportService {
           <rect x="0" y="0" width="${n.width}" height="${n.height}" rx="20" fill="${p.mediatorBg}" stroke="${p.mediatorBorder}" stroke-width="2" stroke-dasharray="6 3" ${isDark ? 'filter="drop-shadow(0 0 8px #7C3AED73)"' : ''} />
           <circle cx="18" cy="${n.height / 2}" r="8" fill="#7C3AED" />
           <text x="34" y="24" font-size="12" font-weight="600" fill="${p.mediatorTitle}" font-family="system-ui, sans-serif">${this.escapeXml(n.title)}</text>
-          ${n.customLabel ? `<text x="34" y="42" font-size="10" fill="${p.mediatorLabel}" font-family="system-ui, sans-serif">${this.escapeXml(n.customLabel)}</text>` : `<text x="34" y="42" font-size="9" font-weight="600" fill="${p.mediatorLabel}" font-family="system-ui, sans-serif">KÊNH TRUNG GIAN</text>`}
+          ${n.customLabel ? n.customLabel.split('\n').map((line, idx) => `<text x="34" y="${42 + idx * 14}" font-size="10" fill="${p.mediatorLabel}" font-family="system-ui, sans-serif">${this.escapeXml(line)}</text>`).join('') : `<text x="34" y="42" font-size="9" font-weight="600" fill="${p.mediatorLabel}" font-family="system-ui, sans-serif">KÊNH TRUNG GIAN</text>`}
         </g>`;
         }
 
@@ -186,7 +186,7 @@ export class ExportService {
           <path d="M 0 10 Q ${n.width / 2} 18 ${n.width} 10 L ${n.width} 0 Q ${n.width / 2} -4 0 0 Z" fill="${p.storageHeader}" />
           <circle cx="18" cy="${n.height / 2}" r="8" fill="#0284C7" />
           <text x="34" y="24" font-size="12" font-weight="600" fill="${p.storageTitle}" font-family="system-ui, sans-serif">${this.escapeXml(n.title)}</text>
-          ${n.customLabel ? `<text x="34" y="42" font-size="10" fill="${p.storageLabel}" font-family="system-ui, sans-serif">${this.escapeXml(n.customLabel)}</text>` : `<text x="34" y="42" font-size="9" font-weight="600" fill="${p.storageLabel}" font-family="system-ui, sans-serif">STORAGE OBJECT</text>`}
+          ${n.customLabel ? n.customLabel.split('\n').map((line, idx) => `<text x="34" y="${42 + idx * 14}" font-size="10" fill="${p.storageLabel}" font-family="system-ui, sans-serif">${this.escapeXml(line)}</text>`).join('') : `<text x="34" y="42" font-size="9" font-weight="600" fill="${p.storageLabel}" font-family="system-ui, sans-serif">STORAGE OBJECT</text>`}
         </g>`;
         }
 
@@ -201,7 +201,7 @@ export class ExportService {
           <text x="14" y="24" font-size="12" font-weight="600" fill="${p.nodeTitle}" font-family="system-ui, sans-serif">${this.escapeXml(n.title)}</text>
           ${
             n.customLabel
-              ? `<text x="14" y="42" font-size="10" fill="${p.nodeLabel}" font-family="system-ui, sans-serif">${this.escapeXml(n.customLabel)}</text>`
+              ? n.customLabel.split('\n').map((line, idx) => `<text x="14" y="${42 + idx * 14}" font-size="10" fill="${p.nodeLabel}" font-family="system-ui, sans-serif">${this.escapeXml(line)}</text>`).join('')
               : ''
           }
         </g>`;

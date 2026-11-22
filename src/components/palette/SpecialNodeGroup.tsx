@@ -11,6 +11,7 @@ interface SpecialNodeGroupProps {
   onAddTemplate: () => void;
   onEditTemplate: (template: NodeTemplate) => void;
   onDeleteTemplate: (baseId: string) => void;
+  onDuplicateTemplate?: (template: NodeTemplate) => void;
   onAddNodeToFrame: (baseId: string) => void;
   activeFrameTitle?: string | null;
 }
@@ -22,6 +23,7 @@ export const SpecialNodeGroup: React.FC<SpecialNodeGroupProps> = ({
   onAddTemplate,
   onEditTemplate,
   onDeleteTemplate,
+  onDuplicateTemplate,
   onAddNodeToFrame,
   activeFrameTitle,
 }) => {
@@ -83,6 +85,7 @@ export const SpecialNodeGroup: React.FC<SpecialNodeGroupProps> = ({
                 roleColor={meta.color}
                 onEdit={() => onEditTemplate(tpl)}
                 onDelete={() => onDeleteTemplate(tpl.base_id)}
+                onDuplicate={onDuplicateTemplate ? () => onDuplicateTemplate(tpl) : undefined}
                 onAddToActiveFrame={() => onAddNodeToFrame(tpl.base_id)}
                 activeFrameTitle={activeFrameTitle}
               />

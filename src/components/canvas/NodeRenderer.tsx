@@ -216,14 +216,14 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       )}
 
       {/* Content Layer (Heading on Top, Note Below) */}
-      <foreignObject x={8} y={4} width={node.width - 16} height={node.height - 8}>
+      <foreignObject x={8} y={4} width={node.width - 16} height={node.height - 8} style={{ overflow: 'visible' }}>
         <div className="w-full h-full flex flex-col justify-between text-left pointer-events-none select-none">
           {/* Top Line: Heading */}
-          <div className="flex items-center justify-between gap-1 w-full shrink-0">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-1 w-full shrink-0">
+            <div className="flex items-start gap-1.5 min-w-0 flex-1">
               {isSpecial ? (
                 <div
-                  className="w-4 h-4 rounded-full text-white flex items-center justify-center shrink-0"
+                  className="w-4 h-4 rounded-full text-white flex items-center justify-center shrink-0 mt-0.5"
                   style={{ backgroundColor: kindColor }}
                 >
                   {isStorage ? <Database size={10} /> : <ArrowLeftRight size={10} />}
@@ -231,8 +231,15 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
               ) : null}
 
               <span
-                className={`font-bold text-xs truncate leading-tight ${titleClass}`}
+                className={`font-bold text-xs leading-snug line-clamp-2 break-words ${titleClass}`}
                 title={node.title}
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
+                }}
               >
                 {node.title}
               </span>
@@ -241,7 +248,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
             {/* Listing toggle indicator */}
             {hasListings && (
               <button
-                className="pointer-events-auto p-0.5 text-gray-400 hover:text-blue-500 transition-colors shrink-0"
+                className="pointer-events-auto p-0.5 text-gray-400 hover:text-blue-500 transition-colors shrink-0 mt-0.5"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (onToggleListings) onToggleListings(node.instanceId);
@@ -254,7 +261,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
             {!isSpecial && node.cornerSymbol !== 'none' && (
               <span
-                className="w-4 h-4 rounded flex items-center justify-center shrink-0 text-[10px]"
+                className="w-4 h-4 rounded flex items-center justify-center shrink-0 text-[10px] mt-0.5"
                 style={{ backgroundColor: `${node.color}25`, color: node.color }}
               >
                 <CornerSymbolIcon symbol={node.cornerSymbol} size={11} />
@@ -266,54 +273,73 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
           <div className="flex-1 mt-1 flex flex-col justify-center min-h-0">
             {isEditing ? (
               <div
-                className="flex items-center gap-1 pointer-events-auto"
+                className="flex items-start gap-1 pointer-events-auto"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <input
-                  type="text"
+                <textarea
                   autoFocus
-                  placeholder="Thêm mô tả..."
+                  placeholder="Thêm mô tả (Shift+Enter để xuống dòng)..."
                   value={editText}
+                  rows={Math.max(2, Math.min(6, editText.split('\n').length))}
                   onChange={(e) => setEditText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveEdit();
-                    if (e.key === 'Escape') setIsEditing(false);
+                  onFocus={(e) => {
+                    const val = e.currentTarget.value;
+                    e.currentTarget.setSelectionRange(val.length, val.length);
                   }}
-                  className={`w-full text-[11px] border rounded px-1.5 py-0.5 outline-none ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (e.shiftKey) {
+                        e.stopPropagation();
+                      } else {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSaveEdit();
+                      }
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsEditing(false);
+                    }
+                  }}
+                  className={`w-full text-[11px] leading-tight border rounded px-1.5 py-1 outline-none resize-none shadow-md ${
                     isDark
-                      ? 'bg-slate-800 border-blue-500 text-white'
-                      : 'bg-white border-blue-500 text-slate-800'
+                      ? 'bg-slate-800 border-blue-500 text-white placeholder-slate-400'
+                      : 'bg-white border-blue-500 text-slate-800 placeholder-slate-400'
                   }`}
                 />
-                <button
-                  onClick={handleSaveEdit}
-                  className="p-0.5 text-green-500 hover:bg-green-500/10 rounded shrink-0"
-                  title="Lưu"
-                >
-                  <Check size={12} />
-                </button>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="p-0.5 text-gray-400 hover:bg-gray-500/10 rounded shrink-0"
-                  title="Hủy"
-                >
-                  <X size={12} />
-                </button>
+                <div className="flex flex-col gap-0.5 shrink-0 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    className="p-1 text-green-500 hover:bg-green-500/10 rounded"
+                    title="Lưu (Enter)"
+                  >
+                    <Check size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="p-1 text-gray-400 hover:bg-gray-500/10 rounded"
+                    title="Hủy (Esc)"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
             ) : (
               <>
                 {/* Description / Label */}
                 {isSpecial ? (
                   <span
-                    className="text-[10px] font-semibold tracking-wide uppercase truncate"
+                    className="text-[10px] font-semibold tracking-wide uppercase whitespace-pre-wrap break-words"
                     style={{ color: kindColor }}
                   >
                     {node.customLabel || kindTag}
                   </span>
                 ) : node.customLabel ? (
                   <p
-                    className={`text-[11px] leading-snug break-words whitespace-normal line-clamp-2 ${
+                    className={`text-[11px] leading-snug break-words whitespace-pre-wrap ${
                       isDark ? 'text-slate-300' : 'text-slate-600'
                     }`}
                   >

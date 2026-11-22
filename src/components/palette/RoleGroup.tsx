@@ -12,6 +12,7 @@ interface RoleGroupProps {
   onAddTemplate: () => void;
   onEditTemplate: (template: NodeTemplate) => void;
   onDeleteTemplate: (baseId: string) => void;
+  onDuplicateTemplate?: (template: NodeTemplate) => void;
   onAddNodeToFrame: (baseId: string) => void;
   activeFrameTitle?: string | null;
 }
@@ -25,6 +26,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
   onAddTemplate,
   onEditTemplate,
   onDeleteTemplate,
+  onDuplicateTemplate,
   onAddNodeToFrame,
   activeFrameTitle,
 }) => {
@@ -133,6 +135,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
                 roleColor={role.color}
                 onEdit={() => onEditTemplate(tpl)}
                 onDelete={() => onDeleteTemplate(tpl.base_id)}
+                onDuplicate={onDuplicateTemplate ? () => onDuplicateTemplate(tpl) : undefined}
                 onAddToActiveFrame={() => onAddNodeToFrame(tpl.base_id)}
                 activeFrameTitle={activeFrameTitle}
               />

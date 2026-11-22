@@ -111,6 +111,8 @@ export interface DiagramSection {
   roles?: Role[];
   node_palette?: NodeTemplate[];
   frames: Frame[];
+  nodes?: NodeInstance[];
+  edges_config?: EdgeConfig[];
   edge_routes?: Record<string, EdgeRoute>;
 }
 
@@ -121,6 +123,8 @@ export interface ProjectSchema {
   roles: Role[];
   node_palette: NodeTemplate[];
   frames: Frame[];
+  nodes?: NodeInstance[];
+  edges_config?: EdgeConfig[];
   /** Manual route overrides keyed by `${fromInstanceId}>${toInstanceId}`. Absent = automatic routing. */
   edge_routes?: Record<string, EdgeRoute>;
   /** Multi-diagram support: list of diagrams stacked vertically in project */

@@ -109,35 +109,62 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
 
           {/* Title or Custom Label Input */}
           {editingLabel ? (
-            <div className="flex items-center gap-1 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
-              <input
-                type="text"
+            <div className="flex items-start gap-1 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+              <textarea
                 autoFocus
-                placeholder="Ghi chú riêng..."
+                placeholder="Ghi chú riêng (Shift+Enter để xuống dòng)..."
                 value={labelText}
+                rows={Math.max(2, Math.min(5, labelText.split('\n').length))}
                 onChange={(e) => setLabelText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveLabel();
-                  if (e.key === 'Escape') setEditingLabel(false);
+                onFocus={(e) => {
+                  const val = e.currentTarget.value;
+                  e.currentTarget.setSelectionRange(val.length, val.length);
                 }}
-                className="w-full text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-blue-400 rounded px-1.5 py-0.5 outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (e.shiftKey) {
+                      e.stopPropagation();
+                    } else {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSaveLabel();
+                    }
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setEditingLabel(false);
+                  }
+                }}
+                className="w-full text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-blue-400 rounded px-1.5 py-1 outline-none resize-none"
               />
-              <button onClick={handleSaveLabel} className="text-green-600 hover:text-green-700 p-0.5">
-                <Check size={12} />
-              </button>
-              <button onClick={() => setEditingLabel(false)} className="text-gray-400 hover:text-gray-600 p-0.5">
-                <X size={12} />
-              </button>
+              <div className="flex flex-col gap-0.5 shrink-0 pt-0.5">
+                <button onClick={handleSaveLabel} className="text-green-600 hover:text-green-700 p-0.5" title="Lưu (Enter)">
+                  <Check size={12} />
+                </button>
+                <button onClick={() => setEditingLabel(false)} className="text-gray-400 hover:text-gray-600 p-0.5" title="Hủy (Esc)">
+                  <X size={12} />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="min-w-0 flex-1">
               {/* Main Heading: Tên Node (Title) giống như mục Kho Node */}
-              <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate" title={nodeTitle}>
+              <p
+                className="text-xs font-semibold text-gray-800 dark:text-slate-200 line-clamp-2 break-words leading-tight"
+                title={nodeTitle}
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
+                }}
+              >
                 {nodeTitle}
               </p>
               {/* Mô tả / Ghi chú (Custom Label) hiển thị rõ bên dưới nếu có */}
               {nodeDescription && (
-                <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate mt-0.5" title={nodeDescription}>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 whitespace-pre-line break-words mt-0.5" title={nodeDescription}>
                   {nodeDescription}
                 </p>
               )}

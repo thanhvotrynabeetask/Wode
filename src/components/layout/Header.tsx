@@ -140,7 +140,8 @@ export const Header: React.FC = () => {
     if (isDirty) {
       setPendingAction('exit');
     } else {
-      const hasContent = schema.frames.length > 0 || schema.roles.length > 0;
+      const hasContent =
+        schema.frames.length > 0 || schema.roles.length > 0 || (schema.nodes || []).length > 0;
       if (hasContent) {
         setShowCleanExitConfirm(true);
       } else {

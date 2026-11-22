@@ -10,8 +10,8 @@ export const CANVAS_DEFAULTS = {
   ZOOM_MIN: 0.2,
   ZOOM_MAX: 3,
   ZOOM_STEP: 0.1,
-  NODE_WIDTH: 160,
-  NODE_HEIGHT: 60,
+  NODE_WIDTH: 175,
+  NODE_HEIGHT: 64,
   LANE_MIN_HEIGHT: 100,
   FRAME_PADDING: 24,
   NODE_MARGIN: 16,
@@ -19,6 +19,8 @@ export const CANVAS_DEFAULTS = {
   MIN_SPACING: 24,
   /** Default horizontal gap — the tightest that keeps messages readable. */
   DEFAULT_SPACING: 24,
+  /** Maximum character limit for node heading to comfortably display up to 2 lines. */
+  MAX_NODE_TITLE_LENGTH: 50,
 };
 
 export const LOG_LEVELS = {

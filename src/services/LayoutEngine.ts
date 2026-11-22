@@ -152,6 +152,8 @@ function getDiagramList(schema: ProjectSchema): DiagramSection[] {
           roles: schema.roles || [],
           node_palette: schema.node_palette || [],
           frames: schema.frames || [],
+          nodes: schema.nodes || diag.nodes || [],
+          edges_config: schema.edges_config || diag.edges_config || [],
           edge_routes: schema.edge_routes || diag.edge_routes || {},
         };
       }
@@ -160,6 +162,8 @@ function getDiagramList(schema: ProjectSchema): DiagramSection[] {
         roles: diag.roles || [],
         node_palette: diag.node_palette || [],
         frames: diag.frames || [],
+        nodes: diag.nodes || [],
+        edges_config: diag.edges_config || [],
         edge_routes: diag.edge_routes || {},
       };
     });
@@ -172,6 +176,8 @@ function getDiagramList(schema: ProjectSchema): DiagramSection[] {
       roles: schema.roles || [],
       node_palette: schema.node_palette || [],
       frames: schema.frames || [],
+      nodes: schema.nodes || [],
+      edges_config: schema.edges_config || [],
       edge_routes: schema.edge_routes,
     },
   ];
@@ -187,14 +193,25 @@ export class LayoutEngine {
 
     // Dynamic node height helper
     const computeNodeHeight = (nodeInst: typeof schema.frames[0]['nodes'][0]): number => {
-      if (nodeInst.custom_height !== undefined && nodeInst.custom_height > 0) {
-        return nodeInst.custom_height;
-      }
       const customLabel = nodeInst.custom_label || '';
-      let height = CANVAS_DEFAULTS.NODE_HEIGHT; // base 60px
-      if (customLabel.length > 18) {
-        const extraLines = Math.ceil((customLabel.length - 18) / 18);
-        height += extraLines * 16;
+      const title = nodeInst.title || '';
+      let height = CANVAS_DEFAULTS.NODE_HEIGHT; // base height (64px)
+
+      // If title wraps into 2 lines (more than ~20 characters or has newline)
+      if (title.length > 20 || title.includes('\n')) {
+        height += 14;
+      }
+
+      if (customLabel) {
+        const lines = customLabel.split('\n');
+        let visualLineCount = 0;
+        for (const line of lines) {
+          // Each line takes at least 1 visual row; if line exceeds ~22 chars, estimate wrapping rows
+          visualLineCount += Math.max(1, Math.ceil(line.length / 22));
+        }
+        if (visualLineCount > 1) {
+          height += (visualLineCount - 1) * 16;
+        }
       }
       if (
         nodeInst.listings &&
@@ -202,6 +219,9 @@ export class LayoutEngine {
         expandedListings.has(nodeInst.instance_id)
       ) {
         height += nodeInst.listings.length * 14 + 10;
+      }
+      if (nodeInst.custom_height !== undefined && nodeInst.custom_height > 0) {
+        return Math.max(height, nodeInst.custom_height);
       }
       return height;
     };
@@ -247,7 +267,8 @@ export class LayoutEngine {
         return candidate && roleMap.has(candidate) ? candidate : fallbackRoleId;
       };
 
-      const totalNodesInDiag = diag.frames.reduce((sum, f) => sum + f.nodes.length, 0);
+      const totalNodesInDiag =
+        (diag.nodes?.length || 0) + diag.frames.reduce((sum, f) => sum + f.nodes.length, 0);
 
       // 1. Diagram Header
       const headerY = currentDiagramTopY;
@@ -289,6 +310,16 @@ export class LayoutEngine {
         const roleMaxHeightMap = new Map<string, number>();
         diagRoles.forEach((r) => roleMaxHeightMap.set(r.id, CANVAS_DEFAULTS.NODE_HEIGHT));
 
+        if (diag.nodes && diag.nodes.length > 0) {
+          diag.nodes.forEach((n) => {
+            const tpl = templateMap.get(n.base_id);
+            const roleId = resolveRoleId(n, tpl);
+            const h = computeNodeHeight(n);
+            const curMax = roleMaxHeightMap.get(roleId) || CANVAS_DEFAULTS.NODE_HEIGHT;
+            if (h > curMax) roleMaxHeightMap.set(roleId, h);
+          });
+        }
+
         diag.frames.forEach((frame) => {
           frame.nodes.forEach((n) => {
             const tpl = templateMap.get(n.base_id);
@@ -323,6 +354,66 @@ export class LayoutEngine {
       // 3. Position Frames and Nodes along X-axis
       let currentX = startX;
       const nodePositionMap = new Map<string, LayoutNode>();
+
+      // 3a. Position Standalone Nodes (Nodes not in any frame)
+      if (diag.nodes && diag.nodes.length > 0) {
+        let maxNodeRightX = currentX;
+
+        diag.nodes.forEach((nodeInst, nIdx) => {
+          const tpl = templateMap.get(nodeInst.base_id);
+          const nodeKind = resolveKind(nodeInst, tpl);
+          const isSpecial = nodeKind !== 'standard';
+
+          const roleId = resolveRoleId(nodeInst, tpl);
+          const role = roleMap.get(roleId);
+          const laneInfo = roleYMap.get(roleId) || { y: diagramSwimlanesStartY, height: 130 };
+
+          const nodeHeight = computeNodeHeight(nodeInst);
+          const nodeWidth = computeNodeWidth(nodeInst);
+
+          const defaultX = currentX + nIdx * (nodeWidth + nodeGapX);
+          const nodeX = nodeInst.custom_x !== undefined ? nodeInst.custom_x : defaultX;
+
+          let nodeY = laneInfo.y + (laneInfo.height - nodeHeight) / 2;
+          if (!isSpecial && nodeInst.custom_y !== undefined) {
+            const minY = laneInfo.y + 4;
+            const maxY = laneInfo.y + laneInfo.height - nodeHeight - 4;
+            if (nodeInst.custom_y >= minY && nodeInst.custom_y <= maxY) {
+              nodeY = nodeInst.custom_y;
+            }
+          }
+
+          const layoutNode: LayoutNode = {
+            instanceId: nodeInst.instance_id,
+            baseId: nodeInst.base_id,
+            frameId: '',
+            frameTitle: '',
+            diagramId: diag.id,
+            roleId,
+            title: tpl?.title || nodeInst.title,
+            customLabel: nodeInst.custom_label,
+            cornerSymbol: tpl?.corner_symbol || 'none',
+            nodeKind,
+            color: isSpecial ? NODE_KIND_META[nodeKind as 'storage' | 'mediator'].color : role?.color || '#3B82F6',
+            x: nodeX,
+            y: nodeY,
+            width: nodeWidth,
+            height: nodeHeight,
+            laneY: laneInfo.y,
+            laneHeight: laneInfo.height,
+            listings: nodeInst.listings,
+          };
+
+          layoutNodes.push(layoutNode);
+          nodePositionMap.set(nodeInst.instance_id, layoutNode);
+
+          if (nodeX + nodeWidth > maxNodeRightX) {
+            maxNodeRightX = nodeX + nodeWidth;
+          }
+        });
+
+        currentX = maxNodeRightX + frameGap;
+      }
 
       diag.frames.forEach((frame) => {
         const frameStartX = currentX;
@@ -412,6 +503,38 @@ export class LayoutEngine {
 
       // 4. Collect and Route Edges for this Diagram
       const rawEdges: RawEdgeSpec[] = [];
+
+      // 4a. Standalone edges (diagram-level edges)
+      if (diag.edges_config && diag.edges_config.length > 0) {
+        diag.edges_config.forEach((edgeConf, eIdx) => {
+          rawEdges.push({
+            id: edgeConf.edge_id || `edge_standalone_${eIdx}`,
+            fromInstanceId: edgeConf.from_instance,
+            toInstanceId: edgeConf.to_instance,
+            frameId: '',
+            label: edgeConf.message_label,
+            flowType: edgeConf.flow_type || 'solid',
+            color: edgeConf.color,
+            curvatureOffset: edgeConf.curvature_offset,
+            isMacro: false,
+            sourceAnchor: edgeConf.source_anchor,
+            targetAnchor: edgeConf.target_anchor,
+          });
+        });
+      } else if (diag.frames.length === 0 && diag.nodes && diag.nodes.length >= 2) {
+        // Auto sequential edge connection when no frames and no custom edges defined
+        for (let i = 0; i < diag.nodes.length - 1; i++) {
+          rawEdges.push({
+            id: `auto_standalone_${i}`,
+            fromInstanceId: diag.nodes[i].instance_id,
+            toInstanceId: diag.nodes[i + 1].instance_id,
+            frameId: '',
+            label: undefined,
+            flowType: 'solid',
+            isMacro: false,
+          });
+        }
+      }
 
       diag.frames.forEach((frame) => {
         if (frame.nodes.length < 2) return;

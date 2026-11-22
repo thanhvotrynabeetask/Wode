@@ -2,7 +2,7 @@ import React from 'react';
 import { NodeTemplate } from '../../types/schema';
 import { Badge } from '../common/Badge';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
-import { MoreVertical, Edit2, Trash2, Plus, Database, ArrowLeftRight } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Plus, Copy, Database, ArrowLeftRight } from 'lucide-react';
 import { NODE_KIND_META, isSpecialKind } from '../../utils/nodeKind';
 
 interface NodeCardProps {
@@ -11,6 +11,7 @@ interface NodeCardProps {
   roleColor: string;
   onEdit: () => void;
   onDelete: () => void;
+  onDuplicate?: () => void;
   onAddToActiveFrame?: () => void;
   activeFrameTitle?: string | null;
 }
@@ -21,6 +22,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
   roleColor,
   onEdit,
   onDelete,
+  onDuplicate,
   onAddToActiveFrame,
   activeFrameTitle,
 }) => {
@@ -44,11 +46,11 @@ export const NodeCard: React.FC<NodeCardProps> = ({
       }`}
     >
       <div className="flex items-start justify-between gap-1.5 mb-1.5">
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-start gap-1.5 min-w-0">
           {/* Icon Badge */}
           {isSpecial && kindMeta ? (
             <span
-              className="flex items-center justify-center w-5 h-5 rounded shrink-0"
+              className="flex items-center justify-center w-5 h-5 rounded shrink-0 mt-0.5"
               style={{ backgroundColor: `${kindMeta.color}1A`, color: kindMeta.color }}
               title={kindMeta.tag}
             >
@@ -56,7 +58,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
             </span>
           ) : (
             <span
-              className="flex items-center justify-center w-5 h-5 rounded shrink-0"
+              className="flex items-center justify-center w-5 h-5 rounded shrink-0 mt-0.5"
               style={{ backgroundColor: `${roleColor}1A`, color: roleColor }}
               title={template.corner_symbol}
             >
@@ -65,7 +67,17 @@ export const NodeCard: React.FC<NodeCardProps> = ({
           )}
 
           {/* Node Title */}
-          <span className="text-xs font-medium text-gray-800 truncate" title={template.title}>
+          <span
+            className="text-xs font-medium text-gray-800 dark:text-slate-200 line-clamp-2 break-words leading-tight"
+            title={template.title}
+            style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              wordBreak: 'break-word',
+            }}
+          >
             {template.title}
           </span>
         </div>
@@ -90,7 +102,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-30 text-xs">
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-30 text-xs">
                   <button
                     onClick={() => {
                       setMenuOpen(false);
@@ -101,6 +113,18 @@ export const NodeCard: React.FC<NodeCardProps> = ({
                     <Edit2 size={12} />
                     Sửa mẫu
                   </button>
+                  {onDuplicate && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDuplicate();
+                      }}
+                      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-violet-600 hover:bg-violet-50"
+                    >
+                      <Copy size={12} />
+                      Nhân bản độc lập
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setMenuOpen(false);
@@ -129,19 +153,37 @@ export const NodeCard: React.FC<NodeCardProps> = ({
         </div>
       )}
 
-      {/* Quick Add action to active frame */}
-      {onAddToActiveFrame && (
-        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+      {/* Quick Add / Duplicate action */}
+      {(onAddToActiveFrame || onDuplicate) && (
+        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
           <span className="text-[10px] text-gray-400">
-            {activeFrameTitle ? `+ Đưa vào ${activeFrameTitle}` : '+ Đưa vào Frame'}
+            {isUnused
+              ? activeFrameTitle
+                ? `+ Đưa vào ${activeFrameTitle}`
+                : '+ Đưa vào sơ đồ'
+              : 'Đã có trên sơ đồ'}
           </span>
-          <button
-            onClick={onAddToActiveFrame}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-blue-600 hover:bg-blue-50 transition-colors"
-          >
-            <Plus size={12} />
-            Thêm
-          </button>
+          {isUnused && onAddToActiveFrame ? (
+            <button
+              onClick={onAddToActiveFrame}
+              title={activeFrameTitle ? `Đưa vào khung ${activeFrameTitle}` : 'Đưa vào sơ đồ'}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              <Plus size={12} />
+              Đưa vào
+            </button>
+          ) : (
+            onDuplicate && (
+              <button
+                onClick={onDuplicate}
+                title="Tạo bản sao độc lập (sửa, xóa riêng biệt)"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <Copy size={12} />
+                Nhân bản
+              </button>
+            )
+          )}
         </div>
       )}
     </div>

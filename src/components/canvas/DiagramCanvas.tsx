@@ -51,6 +51,7 @@ export const DiagramCanvas: React.FC = () => {
     updateNodeInstance,
     updateRole,
     updateEdge,
+    updateStandaloneEdge,
     setEdgeRoute,
     clearAllEdgeRoutes,
     setActiveDiagram,
@@ -476,6 +477,15 @@ export const DiagramCanvas: React.FC = () => {
               target_anchor: routeDrag.targetAnchor,
             }
           );
+        } else {
+          updateStandaloneEdge(
+            routeDrag.edge.fromInstanceId,
+            routeDrag.edge.toInstanceId,
+            {
+              source_anchor: routeDrag.sourceAnchor,
+              target_anchor: routeDrag.targetAnchor,
+            }
+          );
         }
       }
       setRouteDrag(null);
@@ -648,6 +658,11 @@ export const DiagramCanvas: React.FC = () => {
 
     if (edge.frameId) {
       updateEdge(edge.frameId, edge.fromInstanceId, edge.toInstanceId, {
+        source_anchor: newSourceAnchor,
+        target_anchor: newTargetAnchor,
+      });
+    } else {
+      updateStandaloneEdge(edge.fromInstanceId, edge.toInstanceId, {
         source_anchor: newSourceAnchor,
         target_anchor: newTargetAnchor,
       });
@@ -844,9 +859,11 @@ export const DiagramCanvas: React.FC = () => {
     target_anchor?: NodeBorderAnchor;
   }) => {
     if (!editingEdge) return;
-    const targetFrameId = editingEdge.frameId || schema.frames[0]?.frame_id;
+    const targetFrameId = editingEdge.frameId || (schema.frames.length > 0 ? schema.frames[0]?.frame_id : '');
     if (targetFrameId) {
       updateEdge(targetFrameId, editingEdge.fromInstanceId, editingEdge.toInstanceId, updates);
+    } else {
+      updateStandaloneEdge(editingEdge.fromInstanceId, editingEdge.toInstanceId, updates);
     }
     if (updates.source_anchor || updates.target_anchor) {
       setEdgeRoute(editingEdge.routeKey, {
@@ -1283,8 +1300,12 @@ export const DiagramCanvas: React.FC = () => {
             isDark ? 'bg-slate-900/90 border-slate-800 text-slate-400' : 'bg-white/90 border-gray-200/90 text-gray-500'
           }`}>
             <span><strong>{schema.roles.length}</strong> Làn</span>
-            <span>•</span>
-            <span><strong>{schema.frames.length}</strong> Phân đoạn</span>
+            {schema.frames.length > 0 && (
+              <>
+                <span>•</span>
+                <span><strong>{schema.frames.length}</strong> Phân đoạn</span>
+              </>
+            )}
             <span>•</span>
             <span><strong>{layout.nodes.length}</strong> Nhiệm vụ</span>
             {selection.selectedInstanceIds.length > 0 && (
