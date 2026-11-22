@@ -18,6 +18,8 @@ import {
   Redo2,
   Layers,
   Plus,
+  Copy,
+  FolderOpen,
   ChevronUp,
   ChevronDown,
   Trash2,
@@ -26,6 +28,8 @@ import {
   X,
 } from 'lucide-react';
 import { CANVAS_DEFAULTS } from '../../utils/constants';
+import { Modal } from '../common/Modal';
+import { Button } from '../common/Button';
 
 interface CanvasSubToolbarProps {
   totalNodes: number;
@@ -58,6 +62,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
     canUndo,
     canRedo,
     addDiagram,
+    duplicateDiagram,
     removeDiagram,
     moveDiagram,
     updateDiagramTitle,
@@ -70,6 +75,12 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
   const [showDiagramPopover, setShowDiagramPopover] = useState(false);
   const [editingDiagId, setEditingDiagId] = useState<string | null>(null);
   const [diagTitleInput, setDiagTitleInput] = useState('');
+
+  // Duplicate Diagram Modal States
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicateSourceId, setDuplicateSourceId] = useState<string>('');
+  const [duplicateTitle, setDuplicateTitle] = useState<string>('');
+  const [duplicateMode, setDuplicateMode] = useState<'full' | 'swimlanes_only'>('full');
 
   const selectedCount = selection.selectedInstanceIds.length;
   const currentSpacing = schema.settings.horizontal_spacing !== undefined ? schema.settings.horizontal_spacing : 40;
@@ -89,8 +100,33 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
   const activeId = schema.active_diagram_id || diagrams[0].id;
   const activeDiagram = diagrams.find((d) => d.id === activeId) || diagrams[0];
 
+  const openDuplicateModal = (diagId: string) => {
+    const target = diagrams.find((d) => d.id === diagId) || activeDiagram;
+    setDuplicateSourceId(target.id);
+    setDuplicateTitle(`${target.title} (Bản sao)`);
+    setDuplicateMode('full');
+    setDuplicateModalOpen(true);
+    setShowDiagramPopover(false);
+  };
+
+  const handleConfirmDuplicate = () => {
+    const source = diagrams.find((d) => d.id === duplicateSourceId) || activeDiagram;
+    duplicateDiagram({
+      sourceDiagramId: duplicateSourceId,
+      title: duplicateTitle,
+      duplicateContent: duplicateMode === 'full',
+    });
+    setDuplicateModalOpen(false);
+    if (duplicateMode === 'full') {
+      addToast('success', `Đã nhân bản toàn bộ sơ đồ "${source?.title || ''}" thành sơ đồ mới bên dưới!`);
+    } else {
+      addToast('success', `Đã nhân bản khung làn bơi của "${source?.title || ''}" thành sơ đồ mới bên dưới!`);
+    }
+  };
+
   return (
-    <div className="h-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-3 flex items-center justify-between gap-2 shrink-0 z-20 select-none shadow-xs text-xs text-gray-700 dark:text-slate-200">
+    <>
+      <div className="h-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-3 flex items-center justify-between gap-2 shrink-0 z-20 select-none shadow-xs text-xs text-gray-700 dark:text-slate-200">
       {/* Left: Undo / Redo + Mode Selector + Multi-selection */}
       <div className="flex items-center gap-1.5">
         {/* Undo & Redo (Requirement 1) */}
@@ -210,28 +246,54 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
           </button>
 
           {showDiagramPopover && (
-            <div className="absolute top-full left-0 mt-1.5 w-84 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-800 p-3 z-30">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-slate-800">
-                <div>
-                  <h4 className="font-bold text-gray-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
-                    <Layers size={13} className="text-blue-600" />
-                    Quản lý Sơ đồ ({diagrams.length})
-                  </h4>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    Sơ đồ xếp theo thứ tự từ trên xuống dưới trên Canvas
-                  </p>
+            <div className="absolute top-full left-0 mt-1.5 w-96 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-800 p-3 z-30">
+              <div className="pb-2.5 mb-2.5 border-b border-gray-100 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h4 className="font-bold text-gray-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+                      <Layers size={13} className="text-blue-600" />
+                      Quản lý Sơ đồ ({diagrams.length})
+                    </h4>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Sơ đồ xếp theo thứ tự từ trên xuống dưới trên Canvas
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowDiagramPopover(false);
+                      window.dispatchEvent(new CustomEvent('wode:open-file', { detail: { mode: 'append' } }));
+                    }}
+                    className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-md text-[11px] font-medium transition-colors shadow-xs"
+                    title="Mở file sơ đồ bổ sung từ máy tính để ghép vào canvas này"
+                  >
+                    <FolderOpen size={11} />
+                    <span>Ghép file</span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    addDiagram();
-                    addToast('success', 'Đã thêm sơ đồ mới nằm ở dưới tiếp theo!');
-                  }}
-                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md text-[11px] font-medium transition-colors shadow-xs"
-                  title="Thêm một sơ đồ mới nằm ở dưới tiếp theo"
-                >
-                  <Plus size={12} />
-                  <span>+ Thêm sơ đồ</span>
-                </button>
+
+                {/* 2 Tính năng riêng biệt: Tạo mới hoàn toàn vs Nhân bản */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      addDiagram();
+                      addToast('success', 'Đã thêm sơ đồ mới hoàn toàn bên dưới!');
+                    }}
+                    className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs"
+                    title="Tạo sơ đồ mới hoàn toàn ở dưới (trống rỗng, không sao chép swimlane cũ)"
+                  >
+                    <Plus size={13} />
+                    <span>+ Tạo mới hoàn toàn</span>
+                  </button>
+
+                  <button
+                    onClick={() => openDuplicateModal(activeId)}
+                    className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs"
+                    title="Nhân bản sơ đồ hiện tại sang sơ đồ mới ở dưới (tùy chọn sao chép làn bơi hoặc cả nội dung)"
+                  >
+                    <Copy size={13} />
+                    <span>Nhân bản sơ đồ</span>
+                  </button>
+                </div>
               </div>
 
               {/* Diagram List */}
@@ -346,6 +408,13 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                               title="Chuyển sơ đồ xuống dưới"
                             >
                               <ChevronDown size={13} />
+                            </button>
+                            <button
+                              onClick={() => openDuplicateModal(diag.id)}
+                              className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded transition-colors"
+                              title="Nhân bản sơ đồ này"
+                            >
+                              <Copy size={13} />
                             </button>
                             <button
                               onClick={() => {
@@ -535,5 +604,121 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         </button>
       </div>
     </div>
-  );
+
+    {/* Duplicate Diagram Modal */}
+    <Modal
+      isOpen={duplicateModalOpen}
+      onClose={() => setDuplicateModalOpen(false)}
+      title="Nhân bản Sơ đồ"
+      size="md"
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+            Sơ đồ gốc cần nhân bản
+          </label>
+          <select
+            value={duplicateSourceId}
+            onChange={(e) => {
+              setDuplicateSourceId(e.target.value);
+              const chosen = diagrams.find((d) => d.id === e.target.value);
+              if (chosen) setDuplicateTitle(`${chosen.title} (Bản sao)`);
+            }}
+            className="w-full text-xs border border-gray-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+          >
+            {diagrams.map((d) => (
+              <option key={d.id} value={d.id}>
+                #{d.order} - {d.title} ({d.frames.reduce((sum, f) => sum + f.nodes.length, 0)} nhiệm vụ)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+            Tên sơ đồ mới
+          </label>
+          <input
+            type="text"
+            value={duplicateTitle}
+            onChange={(e) => setDuplicateTitle(e.target.value)}
+            placeholder="Nhập tên sơ đồ..."
+            className="w-full text-xs border border-gray-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">
+            Chế độ nhân bản
+          </label>
+          <div className="space-y-2">
+            <label
+              onClick={() => setDuplicateMode('full')}
+              className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                duplicateMode === 'full'
+                  ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40'
+                  : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
+              }`}
+            >
+              <input
+                type="radio"
+                name="dup_mode"
+                checked={duplicateMode === 'full'}
+                onChange={() => setDuplicateMode('full')}
+                className="mt-0.5 accent-indigo-600"
+              />
+              <div>
+                <div className="text-xs font-bold text-gray-800 dark:text-slate-100">
+                  Nhân bản toàn bộ sơ đồ (Khuyên dùng)
+                </div>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                  Sao chép toàn bộ: Giữ nguyên các làn bơi (swimlane), bảng mẫu nhiệm vụ và tất cả phân đoạn, nhiệm vụ đã vẽ sang sơ đồ mới độc lập bên dưới.
+                </p>
+              </div>
+            </label>
+
+            <label
+              onClick={() => setDuplicateMode('swimlanes_only')}
+              className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                duplicateMode === 'swimlanes_only'
+                  ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40'
+                  : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
+              }`}
+            >
+              <input
+                type="radio"
+                name="dup_mode"
+                checked={duplicateMode === 'swimlanes_only'}
+                onChange={() => setDuplicateMode('swimlanes_only')}
+                className="mt-0.5 accent-indigo-600"
+              />
+              <div>
+                <div className="text-xs font-bold text-gray-800 dark:text-slate-100">
+                  Chỉ nhân bản khung làn bơi (Swimlane)
+                </div>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                  Sao chép các làn bơi & mẫu nhiệm vụ, giữ phân đoạn trống để bạn vẽ quy trình mới mà không cần tạo lại vai trò/swimlane.
+                </p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
+          <Button variant="ghost" size="sm" onClick={() => setDuplicateModalOpen(false)}>
+            Hủy
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Copy size={13} />}
+            onClick={handleConfirmDuplicate}
+          >
+            Nhân bản ngay
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  </>
+);
 };

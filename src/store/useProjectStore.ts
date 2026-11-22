@@ -21,6 +21,7 @@ interface ProjectState {
   // Project-level
   setProjectName: (name: string) => void;
   loadSchema: (schema: ProjectSchema) => void;
+  appendDiagramFromFile: (loadedSchema: ProjectSchema) => { addedCount: number; diagramTitle: string };
   newProject: () => void;
   markClean: () => void;
   setHorizontalSpacing: (spacing: number) => void;
@@ -78,6 +79,11 @@ interface ProjectState {
 
   // Multi-Diagram support
   addDiagram: (title?: string) => string;
+  duplicateDiagram: (options?: {
+    sourceDiagramId?: string;
+    title?: string;
+    duplicateContent?: boolean;
+  }) => string;
   removeDiagram: (diagramId: string) => void;
   reorderDiagrams: (orderedIds: string[]) => void;
   moveDiagram: (diagramId: string, direction: 'up' | 'down') => void;
@@ -122,30 +128,85 @@ const createEmptySchema = (): ProjectSchema => {
 };
 
 export function syncActiveDiagramToDiagrams(schema: ProjectSchema): DiagramSection[] {
+  const activeId = schema.active_diagram_id || schema.diagrams?.[0]?.id || 'diag_1';
   const diagrams =
     schema.diagrams && schema.diagrams.length > 0
       ? [...schema.diagrams]
       : [
           {
-            id: 'diag_1',
+            id: activeId,
             title: schema.metadata?.project_name || 'Sơ đồ 1',
             order: 1,
+            roles: schema.roles || [],
+            node_palette: schema.node_palette || [],
             frames: schema.frames || [],
-            edge_routes: schema.edge_routes,
+            edge_routes: schema.edge_routes || {},
           },
         ];
 
-  const activeId = schema.active_diagram_id || diagrams[0].id;
   return diagrams.map((diag) => {
     if (diag.id === activeId) {
       return {
         ...diag,
+        roles: schema.roles || [],
+        node_palette: schema.node_palette || [],
         frames: schema.frames,
-        edge_routes: schema.edge_routes,
+        edge_routes: schema.edge_routes || {},
       };
     }
-    return diag;
+    return {
+      ...diag,
+      roles: diag.roles || [],
+      node_palette: diag.node_palette || [],
+      frames: diag.frames || [],
+      edge_routes: diag.edge_routes || {},
+    };
   });
+}
+
+export function updateActiveDiagramInSchema(
+  schema: ProjectSchema,
+  updates: {
+    frames?: Frame[];
+    roles?: Role[];
+    node_palette?: NodeTemplate[];
+    edge_routes?: Record<string, EdgeRoute>;
+  }
+): ProjectSchema {
+  const activeId = schema.active_diagram_id || schema.diagrams?.[0]?.id || 'diag_1';
+  const existingDiagrams =
+    schema.diagrams && schema.diagrams.length > 0
+      ? schema.diagrams
+      : [
+          {
+            id: activeId,
+            title: schema.metadata?.project_name || 'Sơ đồ 1',
+            order: 1,
+            roles: schema.roles || [],
+            node_palette: schema.node_palette || [],
+            frames: schema.frames || [],
+            edge_routes: schema.edge_routes || {},
+          },
+        ];
+
+  const updatedDiagrams = existingDiagrams.map((d) => {
+    if (d.id === activeId) {
+      return {
+        ...d,
+        ...(updates.frames !== undefined ? { frames: updates.frames } : {}),
+        ...(updates.roles !== undefined ? { roles: updates.roles } : {}),
+        ...(updates.node_palette !== undefined ? { node_palette: updates.node_palette } : {}),
+        ...(updates.edge_routes !== undefined ? { edge_routes: updates.edge_routes } : {}),
+      };
+    }
+    return d;
+  });
+
+  return {
+    ...schema,
+    ...updates,
+    diagrams: updatedDiagrams,
+  };
 }
 
 const pushHistory = (past: ProjectSchema[], current: ProjectSchema): ProjectSchema[] => {
@@ -209,10 +270,21 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           id: 'diag_1',
           title: schema.metadata?.project_name || 'Sơ đồ 1',
           order: 1,
+          roles: schema.roles || [],
+          node_palette: schema.node_palette || [],
           frames: schema.frames || [],
-          edge_routes: schema.edge_routes,
+          edge_routes: schema.edge_routes || {},
         },
       ];
+    } else {
+      diagrams = diagrams.map((d, idx) => ({
+        ...d,
+        order: d.order || idx + 1,
+        roles: d.roles || [],
+        node_palette: d.node_palette || [],
+        frames: d.frames || [],
+        edge_routes: d.edge_routes || {},
+      }));
     }
     const activeId = schema.active_diagram_id || diagrams[0].id;
     const activeDiagram = diagrams.find((d) => d.id === activeId) || diagrams[0];
@@ -220,15 +292,172 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     set({
       schema: {
         ...schema,
+        roles: activeDiagram.roles || [],
+        node_palette: activeDiagram.node_palette || [],
         diagrams,
         active_diagram_id: activeDiagram.id,
         frames: activeDiagram.frames,
-        edge_routes: activeDiagram.edge_routes || schema.edge_routes,
+        edge_routes: activeDiagram.edge_routes || {},
       },
       past: [],
       future: [],
       isDirty: false,
     });
+  },
+
+  appendDiagramFromFile: (loaded) => {
+    const s = get();
+    const activeId = s.schema.active_diagram_id || s.schema.diagrams?.[0]?.id || 'diag_1';
+
+    // 1. Current diagrams (with their own roles, palette, frames, routes preserved)
+    const currentDiagrams: DiagramSection[] = (
+      s.schema.diagrams && s.schema.diagrams.length > 0
+        ? s.schema.diagrams
+        : [
+            {
+              id: activeId,
+              title: s.schema.metadata?.project_name || 'Sơ đồ 1',
+              order: 1,
+              roles: s.schema.roles || [],
+              node_palette: s.schema.node_palette || [],
+              frames: s.schema.frames || [],
+              edge_routes: s.schema.edge_routes || {},
+            },
+          ]
+    ).map((d) => {
+      if (d.id === activeId) {
+        return {
+          ...d,
+          roles: s.schema.roles || d.roles || [],
+          node_palette: s.schema.node_palette || d.node_palette || [],
+          frames: s.schema.frames,
+          edge_routes: s.schema.edge_routes || {},
+        };
+      }
+      return d;
+    });
+
+    // 2. Incoming file roles & palette (for the new diagram to keep independently)
+    const incomingRoles: Role[] = (loaded.roles || []).map((r) => ({ ...r }));
+    const incomingPalette: NodeTemplate[] = (loaded.node_palette || []).map((t) => ({ ...t }));
+
+    // 3. Extract incoming diagrams
+    const rawIncomingDiagrams: DiagramSection[] =
+      loaded.diagrams && loaded.diagrams.length > 0
+        ? loaded.diagrams
+        : [
+            {
+              id: generateDiagramId(),
+              title: loaded.metadata?.project_name || 'Sơ đồ bổ sung',
+              order: 1,
+              roles: incomingRoles,
+              node_palette: incomingPalette,
+              frames: loaded.frames || [],
+              edge_routes: loaded.edge_routes || {},
+            },
+          ];
+
+    // 4. Remap IDs in each incoming diagram to prevent collisions with existing canvas,
+    // and strictly isolate its nodes, frames, edges, and routes.
+    const remappedDiagrams: DiagramSection[] = rawIncomingDiagrams.map((diag, diagIdx) => {
+      const newDiagId = generateDiagramId();
+      const frameIdMap = new Map<string, string>();
+      const instanceIdMap = new Map<string, string>();
+
+      // Register new unique IDs for each frame and node instance in THIS diagram
+      diag.frames.forEach((f) => {
+        frameIdMap.set(f.frame_id, generateFrameId());
+        f.nodes.forEach((n) => {
+          instanceIdMap.set(n.instance_id, generateInstanceId(n.base_id));
+        });
+      });
+
+      const remappedFrames: Frame[] = diag.frames.map((f, fIdx) => {
+        const newFrameId = frameIdMap.get(f.frame_id) || generateFrameId();
+        // next_frame_target MUST ONLY point to a frame within THIS diagram
+        const newNextTarget =
+          f.next_frame_target && frameIdMap.has(f.next_frame_target)
+            ? frameIdMap.get(f.next_frame_target)!
+            : null;
+
+        const remappedNodes: NodeInstance[] = f.nodes.map((n) => ({
+          ...n,
+          instance_id: instanceIdMap.get(n.instance_id) || generateInstanceId(n.base_id),
+          custom_y: undefined, // Reset absolute Y coordinate to place node centered inside its new lane
+        }));
+
+        // Filter and remap edges: BOTH from_instance AND to_instance MUST exist in THIS diagram's node map
+        const remappedEdges: EdgeConfig[] = (f.edges_config || [])
+          .filter((e) => instanceIdMap.has(e.from_instance) && instanceIdMap.has(e.to_instance))
+          .map((e) => ({
+            ...e,
+            from_instance: instanceIdMap.get(e.from_instance)!,
+            to_instance: instanceIdMap.get(e.to_instance)!,
+          }));
+
+        return {
+          ...f,
+          frame_id: newFrameId,
+          order: fIdx + 1,
+          next_frame_target: newNextTarget,
+          nodes: remappedNodes,
+          edges_config: remappedEdges,
+        };
+      });
+
+      // Remap edge routes strictly within this diagram (preserve anchors, drop old absolute waypoints)
+      const remappedRoutes: Record<string, EdgeRoute> = {};
+      if (diag.edge_routes) {
+        Object.entries(diag.edge_routes).forEach(([key, route]) => {
+          const parts = key.split('>');
+          if (parts.length === 2 && instanceIdMap.has(parts[0]) && instanceIdMap.has(parts[1])) {
+            const newFrom = instanceIdMap.get(parts[0])!;
+            const newTo = instanceIdMap.get(parts[1])!;
+            remappedRoutes[`${newFrom}>${newTo}`] = {
+              sourceAnchor: route.sourceAnchor,
+              targetAnchor: route.targetAnchor,
+            };
+          }
+        });
+      }
+
+      const diagRoles = diag.roles && diag.roles.length > 0 ? diag.roles : incomingRoles;
+      const diagPalette =
+        diag.node_palette && diag.node_palette.length > 0 ? diag.node_palette : incomingPalette;
+
+      return {
+        id: newDiagId,
+        title: diag.title || loaded.metadata?.project_name || `Sơ đồ bổ sung ${diagIdx + 1}`,
+        order: currentDiagrams.length + diagIdx + 1,
+        roles: diagRoles,
+        node_palette: diagPalette,
+        frames: remappedFrames,
+        edge_routes: remappedRoutes,
+      };
+    });
+
+    const allDiagrams = [...currentDiagrams, ...remappedDiagrams];
+    const firstAdded = remappedDiagrams[0];
+
+    set({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: {
+        ...s.schema,
+        diagrams: allDiagrams,
+        active_diagram_id: firstAdded.id,
+        roles: firstAdded.roles || [],
+        node_palette: firstAdded.node_palette || [],
+        frames: firstAdded.frames,
+        edge_routes: firstAdded.edge_routes || {},
+      },
+      isDirty: true,
+    });
+
+    return {
+      addedCount: remappedDiagrams.length,
+      diagramTitle: firstAdded.title,
+    };
   },
 
   newProject: () => set({ schema: createEmptySchema(), past: [], future: [], isDirty: false, currentFilePath: null }),
@@ -250,26 +479,26 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     })),
 
   addRole: (name, color) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        roles: [...s.schema.roles, { id: generateRoleId(), name, color }],
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedRoles = [...s.schema.roles, { id: generateRoleId(), name, color }];
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { roles: updatedRoles }),
+        isDirty: true,
+      };
+    }),
 
   updateRole: (id, updates) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        roles: s.schema.roles.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedRoles = s.schema.roles.map((r) => (r.id === id ? { ...r, ...updates } : r));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { roles: updatedRoles }),
+        isDirty: true,
+      };
+    }),
 
   removeRole: (id) =>
     set((s) => {
@@ -283,47 +512,46 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: {
-          ...s.schema,
+        schema: updateActiveDiagramInSchema(s.schema, {
           roles: remainingRoles,
           node_palette: nodePalette,
-        },
+        }),
         isDirty: true,
       };
     }),
 
   addNodeTemplate: (template) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        node_palette: [...s.schema.node_palette, { ...template, base_id: generateNodeId() }],
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedPalette = [...s.schema.node_palette, { ...template, base_id: generateNodeId() }];
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { node_palette: updatedPalette }),
+        isDirty: true,
+      };
+    }),
 
   updateNodeTemplate: (baseId, updates) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        node_palette: s.schema.node_palette.map((n) => (n.base_id === baseId ? { ...n, ...updates } : n)),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedPalette = s.schema.node_palette.map((n) => (n.base_id === baseId ? { ...n, ...updates } : n));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { node_palette: updatedPalette }),
+        isDirty: true,
+      };
+    }),
 
   removeNodeTemplate: (baseId) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        node_palette: s.schema.node_palette.filter((n) => n.base_id !== baseId),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedPalette = s.schema.node_palette.filter((n) => n.base_id !== baseId);
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { node_palette: updatedPalette }),
+        isDirty: true,
+      };
+    }),
 
   addFrame: (title) =>
     set((s) => {
@@ -335,37 +563,38 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         edges_config: [],
         next_frame_target: null,
       };
+      const updatedFrames = [...s.schema.frames, newFrame];
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: { ...s.schema, frames: [...s.schema.frames, newFrame] },
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
         isDirty: true,
       };
     }),
 
   updateFrameTitle: (frameId, title) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) => (f.frame_id === frameId ? { ...f, title } : f)),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) => (f.frame_id === frameId ? { ...f, title } : f));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   removeFrame: (frameId) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames
-          .filter((f) => f.frame_id !== frameId)
-          .map((f, i) => ({ ...f, order: i + 1 })),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames
+        .filter((f) => f.frame_id !== frameId)
+        .map((f, i) => ({ ...f, order: i + 1 }));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   reorderFrames: (orderedIds) =>
     set((s) => {
@@ -379,7 +608,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: { ...s.schema, frames: reordered },
+        schema: updateActiveDiagramInSchema(s.schema, { frames: reordered }),
         isDirty: true,
       };
     }),
@@ -396,131 +625,126 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         node_kind: template.node_kind || 'standard',
         assigned_role_id: template.role_id,
       };
+      const updatedFrames = s.schema.frames.map((f) =>
+        f.frame_id === frameId ? { ...f, nodes: [...f.nodes, instance] } : f
+      );
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: {
-          ...s.schema,
-          frames: s.schema.frames.map((f) =>
-            f.frame_id === frameId ? { ...f, nodes: [...f.nodes, instance] } : f
-          ),
-        },
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
         isDirty: true,
       };
     }),
 
   removeNodeFromFrame: (frameId, instanceId) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) =>
-          f.frame_id === frameId
-            ? { ...f, nodes: f.nodes.filter((n) => n.instance_id !== instanceId) }
-            : f
-        ),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) =>
+        f.frame_id === frameId
+          ? { ...f, nodes: f.nodes.filter((n) => n.instance_id !== instanceId) }
+          : f
+      );
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   reorderNodesInFrame: (frameId, orderedInstanceIds) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) => {
-          if (f.frame_id !== frameId) return f;
-          const nodeMap = new Map(f.nodes.map((n) => [n.instance_id, n]));
-          const reordered = orderedInstanceIds.map((id) => nodeMap.get(id)).filter(Boolean) as NodeInstance[];
-          // When reordering in sidebar, sync canvas horizontal order as well
-          const sortedX = f.nodes
-            .map((n) => n.custom_x)
-            .filter((x): x is number => x !== undefined)
-            .sort((a, b) => a - b);
-          if (sortedX.length === reordered.length && sortedX.length > 0) {
-            reordered.forEach((node, idx) => {
-              node.custom_x = sortedX[idx];
-            });
-          } else {
-            reordered.forEach((node) => {
-              delete node.custom_x;
-            });
-          }
-          return { ...f, nodes: reordered };
-        }),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) => {
+        if (f.frame_id !== frameId) return f;
+        const nodeMap = new Map(f.nodes.map((n) => [n.instance_id, n]));
+        const reordered = orderedInstanceIds.map((id) => nodeMap.get(id)).filter(Boolean) as NodeInstance[];
+        const sortedX = f.nodes
+          .map((n) => n.custom_x)
+          .filter((x): x is number => x !== undefined)
+          .sort((a, b) => a - b);
+        if (sortedX.length === reordered.length && sortedX.length > 0) {
+          reordered.forEach((node, idx) => {
+            node.custom_x = sortedX[idx];
+          });
+        } else {
+          reordered.forEach((node) => {
+            delete node.custom_x;
+          });
+        }
+        return { ...f, nodes: reordered };
+      });
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   updateNodeInstance: (frameId, instanceId, updates) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) =>
-          f.frame_id === frameId
-            ? {
-                ...f,
-                nodes: f.nodes.map((n) =>
-                  n.instance_id === instanceId ? { ...n, ...updates } : n
-                ),
-              }
-            : f
-        ),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) =>
+        f.frame_id === frameId
+          ? {
+              ...f,
+              nodes: f.nodes.map((n) =>
+                n.instance_id === instanceId ? { ...n, ...updates } : n
+              ),
+            }
+          : f
+      );
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   updateNodePosition: (frameId, instanceId, customX, customY, assignedRoleId) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) => {
-          if (f.frame_id !== frameId) return f;
-          return {
-            ...f,
-            nodes: f.nodes.map((n) => {
-              if (n.instance_id !== instanceId) return n;
-              return {
-                ...n,
-                custom_x: customX,
-                ...(customY !== undefined ? { custom_y: customY } : {}),
-                ...(assignedRoleId ? { assigned_role_id: assignedRoleId } : {}),
-              };
-            }),
-          };
-        }),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) => {
+        if (f.frame_id !== frameId) return f;
+        return {
+          ...f,
+          nodes: f.nodes.map((n) => {
+            if (n.instance_id !== instanceId) return n;
+            return {
+              ...n,
+              custom_x: customX,
+              ...(customY !== undefined ? { custom_y: customY } : {}),
+              ...(assignedRoleId ? { assigned_role_id: assignedRoleId } : {}),
+            };
+          }),
+        };
+      });
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   updateMultipleNodesPositions: (updates) =>
     set((s) => {
       const updateMap = new Map(updates.map((u) => [u.instanceId, u]));
+      const updatedFrames = s.schema.frames.map((f) => ({
+        ...f,
+        nodes: f.nodes.map((n) => {
+          const u = updateMap.get(n.instance_id);
+          if (!u) return n;
+          return {
+            ...n,
+            custom_x: u.customX,
+            ...(u.customY !== undefined ? { custom_y: u.customY } : {}),
+            ...(u.assignedRoleId ? { assigned_role_id: u.assignedRoleId } : {}),
+          };
+        }),
+      }));
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: {
-          ...s.schema,
-          frames: s.schema.frames.map((f) => ({
-            ...f,
-            nodes: f.nodes.map((n) => {
-              const u = updateMap.get(n.instance_id);
-              if (!u) return n;
-              return {
-                ...n,
-                custom_x: u.customX,
-                ...(u.customY !== undefined ? { custom_y: u.customY } : {}),
-                ...(u.assignedRoleId ? { assigned_role_id: u.assignedRoleId } : {}),
-              };
-            }),
-          })),
-        },
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
         isDirty: true,
       };
     }),
@@ -552,105 +776,103 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         ...(assignedRoleId ? { assigned_role_id: assignedRoleId } : {}),
       };
 
+      const finalFrames = updatedFrames.map((f) => {
+        if (f.frame_id !== toFrameId) return f;
+        const nodes = [...f.nodes];
+        const index =
+          insertIndex === undefined ? nodes.length : Math.max(0, Math.min(insertIndex, nodes.length));
+        nodes.splice(index, 0, finalNode);
+        return { ...f, nodes };
+      });
+
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: {
-          ...s.schema,
-          frames: updatedFrames.map((f) => {
-            if (f.frame_id !== toFrameId) return f;
-            const nodes = [...f.nodes];
-            const index =
-              insertIndex === undefined ? nodes.length : Math.max(0, Math.min(insertIndex, nodes.length));
-            nodes.splice(index, 0, finalNode);
-            return { ...f, nodes };
-          }),
-        },
+        schema: updateActiveDiagramInSchema(s.schema, { frames: finalFrames }),
         isDirty: true,
       };
     }),
 
   resetNodePositions: () =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) => ({
-          ...f,
-          nodes: f.nodes.map((n) => ({
-            ...n,
-            custom_x: undefined,
-            custom_y: undefined,
-          })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) => ({
+        ...f,
+        nodes: f.nodes.map((n) => ({
+          ...n,
+          custom_x: undefined,
+          custom_y: undefined,
         })),
-      },
-      isDirty: true,
-    })),
+      }));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   setEdgeConfig: (frameId, edges) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) =>
-          f.frame_id === frameId ? { ...f, edges_config: edges } : f
-        ),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) =>
+        f.frame_id === frameId ? { ...f, edges_config: edges } : f
+      );
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   updateEdge: (frameId, fromInstance, toInstance, updates) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) => {
-          if (f.frame_id !== frameId) return f;
-          const exists = f.edges_config.some(
-            (e) => e.from_instance === fromInstance && e.to_instance === toInstance
-          );
-          if (exists) {
-            return {
-              ...f,
-              edges_config: f.edges_config.map((e) =>
-                e.from_instance === fromInstance && e.to_instance === toInstance
-                  ? { ...e, ...updates }
-                  : e
-              ),
-            };
-          } else {
-  // Editing an auto-inferred edge turns the frame explicit: keep the other inferred edges alive.
-  const baseEdges: EdgeConfig[] =
-  f.edges_config.length > 0
-  ? f.edges_config
-  : f.nodes.slice(0, -1).map((n, i) => ({
-  from_instance: n.instance_id,
-  to_instance: f.nodes[i + 1].instance_id,
-  message_label: '',
-  flow_type: 'solid' as const,
-  }));
-  return {
-  ...f,
-  edges_config: [
-  ...baseEdges,
-  {
-  from_instance: fromInstance,
-                  to_instance: toInstance,
-                  message_label: updates.message_label || '',
-                  flow_type: updates.flow_type || 'solid',
-                  color: updates.color,
-                  curvature_offset: updates.curvature_offset,
-                },
-              ],
-            };
-          }
-        }),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) => {
+        if (f.frame_id !== frameId) return f;
+        const exists = f.edges_config.some(
+          (e) => e.from_instance === fromInstance && e.to_instance === toInstance
+        );
+        if (exists) {
+          return {
+            ...f,
+            edges_config: f.edges_config.map((e) =>
+              e.from_instance === fromInstance && e.to_instance === toInstance
+                ? { ...e, ...updates }
+                : e
+            ),
+          };
+        } else {
+          const baseEdges: EdgeConfig[] =
+            f.edges_config.length > 0
+              ? f.edges_config
+              : f.nodes.slice(0, -1).map((n, i) => ({
+                  from_instance: n.instance_id,
+                  to_instance: f.nodes[i + 1].instance_id,
+                  message_label: '',
+                  flow_type: 'solid' as const,
+                }));
+          return {
+            ...f,
+            edges_config: [
+              ...baseEdges,
+              {
+                from_instance: fromInstance,
+                to_instance: toInstance,
+                message_label: updates.message_label || '',
+                flow_type: updates.flow_type || 'solid',
+                color: updates.color,
+                curvature_offset: updates.curvature_offset,
+              },
+            ],
+          };
+        }
+      });
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   setEdgeRoute: (routeKey, routeOrWaypoints) =>
     set((s) => {
@@ -690,13 +912,11 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           delete routes[routeKey];
         }
       }
+      const updatedRoutes = Object.keys(routes).length > 0 ? routes : undefined;
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: {
-          ...s.schema,
-          edge_routes: Object.keys(routes).length > 0 ? routes : undefined,
-        },
+        schema: updateActiveDiagramInSchema(s.schema, { edge_routes: updatedRoutes }),
         isDirty: true,
       };
     }),
@@ -705,41 +925,41 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     set((s) => ({
       past: pushHistory(s.past, s.schema),
       future: [],
-      schema: { ...s.schema, edge_routes: undefined },
+      schema: updateActiveDiagramInSchema(s.schema, { edge_routes: undefined }),
       isDirty: true,
     })),
 
   updateEdgeByIndex: (frameId, edgeIndex, updates) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) => {
-          if (f.frame_id !== frameId) return f;
-          return {
-            ...f,
-            edges_config: f.edges_config.map((e, idx) =>
-              idx === edgeIndex ? { ...e, ...updates } : e
-            ),
-          };
-        }),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) => {
+        if (f.frame_id !== frameId) return f;
+        return {
+          ...f,
+          edges_config: f.edges_config.map((e, idx) =>
+            idx === edgeIndex ? { ...e, ...updates } : e
+          ),
+        };
+      });
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   setNextFrameTarget: (frameId, targetFrameId) =>
-    set((s) => ({
-      past: pushHistory(s.past, s.schema),
-      future: [],
-      schema: {
-        ...s.schema,
-        frames: s.schema.frames.map((f) =>
-          f.frame_id === frameId ? { ...f, next_frame_target: targetFrameId } : f
-        ),
-      },
-      isDirty: true,
-    })),
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) =>
+        f.frame_id === frameId ? { ...f, next_frame_target: targetFrameId } : f
+      );
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
 
   // Multi-Diagram support
   addDiagram: (title) => {
@@ -753,11 +973,14 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       order: 1,
       nodes: [],
       edges_config: [],
+      next_frame_target: null,
     };
     const newDiagram: DiagramSection = {
       id: newId,
       title: title?.trim() || `Sơ đồ ${newOrder}`,
       order: newOrder,
+      roles: [], // Sơ đồ mới hoàn toàn: không nhân bản swimlane cũ
+      node_palette: [], // Bảng mẫu mới trống hoàn toàn
       frames: [initialFrame],
       edge_routes: {},
     };
@@ -769,11 +992,155 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         ...s.schema,
         diagrams: updatedDiagrams,
         active_diagram_id: newId,
+        roles: [],
+        node_palette: [],
         frames: newDiagram.frames,
         edge_routes: {},
       },
       isDirty: true,
     });
+    return newId;
+  },
+
+  duplicateDiagram: (options) => {
+    const s = get();
+    const currentDiagrams = syncActiveDiagramToDiagrams(s.schema);
+    const sourceId = options?.sourceDiagramId || s.schema.active_diagram_id || currentDiagrams[0]?.id;
+    const source = currentDiagrams.find((d) => d.id === sourceId) || currentDiagrams[0];
+    if (!source) return '';
+
+    const newId = generateDiagramId();
+    const newOrder = currentDiagrams.length + 1;
+    const duplicateContent = options?.duplicateContent ?? true;
+
+    // 1. Remap roles with fresh IDs
+    const roleIdMap = new Map<string, string>();
+    const newRoles: Role[] = (source.roles || []).map((r) => {
+      const newRoleId = generateRoleId();
+      roleIdMap.set(r.id, newRoleId);
+      return {
+        ...r,
+        id: newRoleId,
+      };
+    });
+
+    // 2. Remap node palette with fresh base_ids and remapped role_ids
+    const templateIdMap = new Map<string, string>();
+    const newPalette: NodeTemplate[] = (source.node_palette || []).map((tpl) => {
+      const newBaseId = generateNodeId();
+      templateIdMap.set(tpl.base_id, newBaseId);
+      return {
+        ...tpl,
+        base_id: newBaseId,
+        role_id: roleIdMap.get(tpl.role_id) || tpl.role_id,
+      };
+    });
+
+    let newFrames: Frame[] = [];
+    const newRoutes: Record<string, EdgeRoute> = {};
+
+    if (duplicateContent) {
+      // 3. Remap frames, node instances, and edges
+      const frameIdMap = new Map<string, string>();
+      const instanceIdMap = new Map<string, string>();
+
+      source.frames.forEach((f) => {
+        frameIdMap.set(f.frame_id, generateFrameId());
+        f.nodes.forEach((n) => {
+          instanceIdMap.set(n.instance_id, generateInstanceId(templateIdMap.get(n.base_id) || n.base_id));
+        });
+      });
+
+      newFrames = source.frames.map((f, fIdx) => {
+        const newFrameId = frameIdMap.get(f.frame_id) || generateFrameId();
+        const newNextTarget =
+          f.next_frame_target && frameIdMap.has(f.next_frame_target)
+            ? frameIdMap.get(f.next_frame_target)!
+            : null;
+
+        const remappedNodes: NodeInstance[] = f.nodes.map((n) => ({
+          ...n,
+          instance_id: instanceIdMap.get(n.instance_id) || generateInstanceId(n.base_id),
+          base_id: templateIdMap.get(n.base_id) || n.base_id,
+          assigned_role_id: n.assigned_role_id ? (roleIdMap.get(n.assigned_role_id) || n.assigned_role_id) : undefined,
+          custom_y: undefined,
+        }));
+
+        const remappedEdges: EdgeConfig[] = (f.edges_config || [])
+          .filter((e) => instanceIdMap.has(e.from_instance) && instanceIdMap.has(e.to_instance))
+          .map((e) => ({
+            ...e,
+            from_instance: instanceIdMap.get(e.from_instance)!,
+            to_instance: instanceIdMap.get(e.to_instance)!,
+          }));
+
+        return {
+          ...f,
+          frame_id: newFrameId,
+          order: fIdx + 1,
+          next_frame_target: newNextTarget,
+          nodes: remappedNodes,
+          edges_config: remappedEdges,
+        };
+      });
+
+      // Remap edge routes
+      if (source.edge_routes) {
+        Object.entries(source.edge_routes).forEach(([key, route]) => {
+          const parts = key.split('>');
+          if (parts.length === 2 && instanceIdMap.has(parts[0]) && instanceIdMap.has(parts[1])) {
+            const newFrom = instanceIdMap.get(parts[0])!;
+            const newTo = instanceIdMap.get(parts[1])!;
+            newRoutes[`${newFrom}>${newTo}`] = {
+              sourceAnchor: route.sourceAnchor,
+              targetAnchor: route.targetAnchor,
+            };
+          }
+        });
+      }
+    } else {
+      // Empty content: single empty frame
+      newFrames = [
+        {
+          frame_id: generateFrameId(),
+          title: 'Giai đoạn 1',
+          order: 1,
+          nodes: [],
+          edges_config: [],
+          next_frame_target: null,
+        },
+      ];
+    }
+
+    const defaultTitle = `${source.title} (Bản sao)`;
+    const newTitle = options?.title?.trim() || defaultTitle;
+
+    const newDiagram: DiagramSection = {
+      id: newId,
+      title: newTitle,
+      order: newOrder,
+      roles: newRoles,
+      node_palette: newPalette,
+      frames: newFrames,
+      edge_routes: newRoutes,
+    };
+
+    const updatedDiagrams = [...currentDiagrams, newDiagram];
+    set({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: {
+        ...s.schema,
+        diagrams: updatedDiagrams,
+        active_diagram_id: newId,
+        roles: newRoles,
+        node_palette: newPalette,
+        frames: newFrames,
+        edge_routes: newRoutes,
+      },
+      isDirty: true,
+    });
+
     return newId;
   },
 
@@ -794,6 +1161,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         ...s.schema,
         diagrams: remaining,
         active_diagram_id: nextActive.id,
+        roles: nextActive.roles || [],
+        node_palette: nextActive.node_palette || [],
         frames: nextActive.frames,
         edge_routes: nextActive.edge_routes || {},
       },
@@ -875,7 +1244,9 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         ...s.schema,
         diagrams: currentDiagrams,
         active_diagram_id: diagramId,
-        frames: target.frames,
+        roles: target.roles || [],
+        node_palette: target.node_palette || [],
+        frames: target.frames || [],
         edge_routes: target.edge_routes || {},
       },
     });

@@ -76,8 +76,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
       message_label: label.trim(),
       flow_type: flowType,
       color,
-      source_anchor: { side: sourceSide, ratio: edge.sourceAnchor?.ratio ?? 0.5 },
-      target_anchor: { side: targetSide, ratio: edge.targetAnchor?.ratio ?? 0.5 },
+      source_anchor: { side: sourceSide, ratio: 0.5 },
+      target_anchor: { side: targetSide, ratio: 0.5 },
     });
     onClose();
   };
@@ -181,7 +181,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
             </div>
           </div>
           <p className="text-[11px] text-gray-500 leading-relaxed italic">
-            * Điểm chạm luôn bám chặt trên viền của 2 Node liên kết và tự động di chuyển theo Node khi dời vị trí.
+            * Mỗi Node có 4 cạnh (ở giữa). Nếu có nhiều luồng cùng nối vào 1 cạnh, hệ thống sẽ tự động xếp đều nằm giữa để tránh đè lấn.
           </p>
         </div>
 

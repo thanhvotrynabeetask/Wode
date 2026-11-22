@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { Save, Settings, FolderOpen, FilePlus, Download, Upload, ChevronDown, LogOut } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Save, Settings, FolderOpen, FilePlus, Download, Upload, ChevronDown, LogOut, Layers } from 'lucide-react';
 import { useProjectStore, syncActiveDiagramToDiagrams } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -14,7 +14,7 @@ import { APP_NAME } from '../../utils/constants';
 type PendingAction = 'new' | 'exit' | 'open';
 
 export const Header: React.FC = () => {
-  const { schema, isDirty, setProjectName, loadSchema, newProject, markClean } = useProjectStore();
+  const { schema, isDirty, setProjectName, loadSchema, appendDiagramFromFile, newProject, markClean } = useProjectStore();
   const { openSettings, addToast } = useUIStore();
   const workspacePath = useSettingsStore((s) => s.workspacePath);
 
@@ -23,6 +23,8 @@ export const Header: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showOpenMenu, setShowOpenMenu] = useState(false);
+  const openModeRef = useRef<'replace' | 'append'>('replace');
 
   // Dialog states for exit / reset flow
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -30,6 +32,7 @@ export const Header: React.FC = () => {
   const [showCleanExitConfirm, setShowCleanExitConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const openButtonRef = useRef<HTMLDivElement>(null);
   const exportButtonRef = useRef<HTMLDivElement>(null);
 
   const handleNameBlur = () => {
@@ -91,6 +94,25 @@ export const Header: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const currentMode = openModeRef.current;
+    // Reset mode back to default for subsequent actions
+    openModeRef.current = 'replace';
+
+    if (currentMode === 'append') {
+      try {
+        const loaded = await ImportService.parseFile(file);
+        const result = appendDiagramFromFile(loaded);
+        addToast(
+          'success',
+          `Đã mở thêm sơ đồ độc lập "${result.diagramTitle}" ngay bên dưới sơ đồ hiện có để đối chiếu!`
+        );
+      } catch (err) {
+        addToast('error', `Không thể mở sơ đồ bổ sung: ${(err as Error).message}`);
+      }
+      e.target.value = '';
+      return;
+    }
+
     if (isDirty) {
       setPendingFile(file);
       setPendingAction('open');
@@ -142,17 +164,31 @@ export const Header: React.FC = () => {
     }
   };
 
-  // Close export menu when clicking outside
-  React.useEffect(() => {
-    if (!showExportMenu) return;
+  // Close dropdown menus when clicking outside
+  useEffect(() => {
+    if (!showExportMenu && !showOpenMenu) return;
     const handler = (e: MouseEvent) => {
       if (exportButtonRef.current && !exportButtonRef.current.contains(e.target as Node)) {
         setShowExportMenu(false);
       }
+      if (openButtonRef.current && !openButtonRef.current.contains(e.target as Node)) {
+        setShowOpenMenu(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showExportMenu]);
+  }, [showExportMenu, showOpenMenu]);
+
+  // Support triggering file open from other components (e.g. CanvasSubToolbar)
+  useEffect(() => {
+    const handleCustomOpen = (e: Event) => {
+      const customEvent = e as CustomEvent<{ mode?: 'replace' | 'append' }>;
+      openModeRef.current = customEvent.detail?.mode || 'replace';
+      fileInputRef.current?.click();
+    };
+    window.addEventListener('wode:open-file', handleCustomOpen);
+    return () => window.removeEventListener('wode:open-file', handleCustomOpen);
+  }, []);
 
   return (
     <>
@@ -223,15 +259,62 @@ export const Header: React.FC = () => {
           Mới
         </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={<FolderOpen size={15} />}
-          onClick={() => fileInputRef.current?.click()}
-          title="Mở file .json hoặc .html từ máy tính"
-        >
-          Mở
-        </Button>
+        {/* Open Dropdown */}
+        <div ref={openButtonRef} className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<FolderOpen size={15} />}
+            onClick={() => setShowOpenMenu((v) => !v)}
+            title="Mở file sơ đồ (.json, .html) hoặc ghép thêm vào canvas"
+          >
+            Mở
+            <ChevronDown size={12} className="ml-0.5" />
+          </Button>
+
+          {showOpenMenu && (
+            <div
+              className="absolute left-0 top-full mt-1 w-72 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <button
+                className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex flex-col gap-0.5"
+                onClick={() => {
+                  setShowOpenMenu(false);
+                  openModeRef.current = 'replace';
+                  fileInputRef.current?.click();
+                }}
+              >
+                <span className="font-semibold flex items-center gap-1.5 text-gray-800 dark:text-slate-100">
+                  <FolderOpen size={14} className="text-blue-500" />
+                  Mở file mới
+                </span>
+                <span className="text-[11px] text-gray-500 dark:text-slate-400 pl-5">
+                  Thay thế toàn bộ sơ đồ hiện tại trên canvas
+                </span>
+              </button>
+
+              <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
+
+              <button
+                className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex flex-col gap-0.5"
+                onClick={() => {
+                  setShowOpenMenu(false);
+                  openModeRef.current = 'append';
+                  fileInputRef.current?.click();
+                }}
+              >
+                <span className="font-semibold flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                  <Layers size={14} />
+                  Mở thêm sơ đồ so sánh (Ghép bên dưới)
+                </span>
+                <span className="text-[11px] text-gray-500 dark:text-slate-400 pl-5">
+                  Mở thêm sơ đồ độc lập bên dưới sơ đồ hiện có để đối chiếu luồng
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
 
         <Button
           variant={isDirty ? 'primary' : 'secondary'}

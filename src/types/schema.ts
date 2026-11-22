@@ -109,6 +109,7 @@ export interface DiagramSection {
   title: string;
   order: number;
   roles?: Role[];
+  node_palette?: NodeTemplate[];
   frames: Frame[];
   edge_routes?: Record<string, EdgeRoute>;
 }

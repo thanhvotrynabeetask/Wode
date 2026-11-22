@@ -5,9 +5,15 @@ interface SwimlaneRendererProps {
   swimlanes: LayoutSwimlane[];
   isDark?: boolean;
   onUpdateLaneSize?: (roleId: string, height: number) => void;
+  onSelectDiagram?: (diagramId: string) => void;
 }
 
-export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({ swimlanes, isDark = false, onUpdateLaneSize }) => {
+export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
+  swimlanes,
+  isDark = false,
+  onUpdateLaneSize,
+  onSelectDiagram,
+}) => {
   const resizeRef = useRef<{ startY: number; startH: number } | null>(null);
 
   const handleLaneResizeStart = (e: React.MouseEvent, lane: LayoutSwimlane) => {
@@ -34,6 +40,85 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({ swimlanes, i
   return (
     <g className="select-none">
       {swimlanes.map((lane, idx) => {
+        if (lane.isEmptyPlaceholder) {
+          return (
+            <g
+              key={lane.id || `${lane.diagramId || 'diag'}_empty`}
+              className="cursor-pointer"
+              onClick={() => {
+                if (lane.diagramId && onSelectDiagram) {
+                  onSelectDiagram(lane.diagramId);
+                }
+              }}
+            >
+              {/* Lane background row */}
+              <rect
+                x={0}
+                y={lane.y}
+                width={lane.width}
+                height={lane.height}
+                fill={isDark ? '#0F172A' : '#F8FAFC'}
+                className="cursor-pointer"
+              />
+
+              {/* Lane bottom border line */}
+              <line
+                x1={0}
+                y1={lane.y + lane.height}
+                x2={lane.width}
+                y2={lane.y + lane.height}
+                stroke={isDark ? '#1E293B' : '#E2E8F0'}
+                strokeWidth={1}
+                strokeDasharray="4 4"
+                className="pointer-events-none"
+              />
+
+              {/* Left Placeholder Card */}
+              <rect
+                x={10}
+                y={lane.y + 12}
+                width={180}
+                height={lane.height - 24}
+                rx={8}
+                fill={isDark ? '#1E293B' : '#FFFFFF'}
+                stroke={isDark ? '#334155' : '#CBD5E1'}
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+              />
+              <text
+                x={100}
+                y={lane.y + 12 + (lane.height - 24) / 2 - 6}
+                textAnchor="middle"
+                fill={isDark ? '#94A3B8' : '#64748B'}
+                fontSize={11}
+                fontWeight={700}
+              >
+                + Chưa có làn bơi
+              </text>
+              <text
+                x={100}
+                y={lane.y + 12 + (lane.height - 24) / 2 + 12}
+                textAnchor="middle"
+                fill={isDark ? '#64748B' : '#94A3B8'}
+                fontSize={9}
+              >
+                (Bấm để tạo làn mới)
+              </text>
+
+              {/* Center Guidance text */}
+              <text
+                x={220}
+                y={lane.y + lane.height / 2 + 4}
+                fill={isDark ? '#94A3B8' : '#64748B'}
+                fontSize={12}
+                fontStyle="italic"
+              >
+                Sơ đồ mới này chưa có làn bơi (swimlane). Bấm vào đây để chọn sơ đồ, sau đó thêm vai trò ở bảng bên trái để tạo làn bơi.
+              </text>
+            </g>
+          );
+        }
+
         const isEven = idx % 2 === 0;
 
         const bgFill = isDark
@@ -87,6 +172,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({ swimlanes, i
               width={lane.width}
               height={lane.height}
               fill={bgFill}
+              className="cursor-grab active:cursor-grabbing"
             />
 
             {/* Lane bottom border line */}
@@ -97,6 +183,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({ swimlanes, i
               y2={lane.y + lane.height}
               stroke={borderColor}
               strokeWidth={1}
+              className="pointer-events-none"
             />
 
             {/* Left Swimlane Role Card */}
@@ -110,6 +197,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({ swimlanes, i
               stroke={cardBorder}
               strokeWidth={1.5}
               filter={isDark ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' : 'drop-shadow(0 1px 3px rgba(0,0,0,0.05))'}
+              className="cursor-grab active:cursor-grabbing"
             />
 
             {/* Role Color left strip on card */}
@@ -120,10 +208,11 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({ swimlanes, i
               height={CARD_HEIGHT}
               rx={3}
               fill={lane.color}
+              className="pointer-events-none"
             />
 
             {/* Role Name - wrapped text, centered in card */}
-            <g>
+            <g className="pointer-events-none">
               {lines.map((line, lineIdx) => (
                 <text
                   key={lineIdx}

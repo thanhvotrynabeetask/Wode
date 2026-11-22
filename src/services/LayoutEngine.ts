@@ -18,13 +18,25 @@ import {
   RouteRequest,
   anchorToPoint,
   pointToBorderAnchor,
+  pointToBorderSide,
+  getNodeSidePort,
+  getNodePortForEdge,
   buildOrthogonalConnector,
   buildManualPoints,
   extractWaypoints,
 } from './EdgeRouter';
 
 export type { Point } from './EdgeRouter';
-export { anchorToPoint, pointToBorderAnchor, buildOrthogonalConnector, buildManualPoints, extractWaypoints };
+export {
+  anchorToPoint,
+  pointToBorderAnchor,
+  pointToBorderSide,
+  getNodeSidePort,
+  getNodePortForEdge,
+  buildOrthogonalConnector,
+  buildManualPoints,
+  extractWaypoints,
+};
 
 export interface LayoutDiagramHeader {
   id: string;
@@ -92,6 +104,7 @@ export interface LayoutSwimlane {
   y: number;
   height: number;
   width: number;
+  isEmptyPlaceholder?: boolean;
 }
 
 export interface LayoutFrameOverlay {
@@ -136,11 +149,19 @@ function getDiagramList(schema: ProjectSchema): DiagramSection[] {
       if (diag.id === activeId) {
         return {
           ...diag,
-          frames: schema.frames,
-          edge_routes: schema.edge_routes,
+          roles: schema.roles || [],
+          node_palette: schema.node_palette || [],
+          frames: schema.frames || [],
+          edge_routes: schema.edge_routes || diag.edge_routes || {},
         };
       }
-      return diag;
+      return {
+        ...diag,
+        roles: diag.roles || [],
+        node_palette: diag.node_palette || [],
+        frames: diag.frames || [],
+        edge_routes: diag.edge_routes || {},
+      };
     });
   }
   return [
@@ -148,6 +169,8 @@ function getDiagramList(schema: ProjectSchema): DiagramSection[] {
       id: schema.active_diagram_id || 'diag_1',
       title: schema.metadata?.project_name || 'Sơ đồ 1',
       order: 1,
+      roles: schema.roles || [],
+      node_palette: schema.node_palette || [],
       frames: schema.frames || [],
       edge_routes: schema.edge_routes,
     },
@@ -161,10 +184,6 @@ export class LayoutEngine {
     const frameGap = 36;
     const nodeGapX = schema.settings.horizontal_spacing !== undefined ? schema.settings.horizontal_spacing : 40;
     const startX = laneHeaderWidth + 24;
-
-    const templateMap = new Map<string, NodeTemplate>(
-      schema.node_palette.map((t) => [t.base_id, t])
-    );
 
     // Dynamic node height helper
     const computeNodeHeight = (nodeInst: typeof schema.frames[0]['nodes'][0]): number => {
@@ -208,7 +227,11 @@ export class LayoutEngine {
     let maxContentWidthAcrossAll = 1100;
 
     diagrams.forEach((diag) => {
-      const diagRoles = diag.roles && diag.roles.length > 0 ? diag.roles : schema.roles;
+      const diagRoles = diag.roles || [];
+      const diagTemplates = diag.node_palette || [];
+      const templateMap = new Map<string, NodeTemplate>(
+        diagTemplates.map((t) => [t.base_id, t])
+      );
       const roleMap = new Map<string, Role>(diagRoles.map((r) => [r.id, r]));
       const fallbackRoleId = diagRoles[0]?.id ?? 'default_role';
 
@@ -246,39 +269,56 @@ export class LayoutEngine {
       const diagramSwimlanesStartY = currentLaneY;
 
       // 2. Dynamic Swimlane Heights for this Diagram
-      const roleMaxHeightMap = new Map<string, number>();
-      diagRoles.forEach((r) => roleMaxHeightMap.set(r.id, CANVAS_DEFAULTS.NODE_HEIGHT));
-
-      diag.frames.forEach((frame) => {
-        frame.nodes.forEach((n) => {
-          const tpl = templateMap.get(n.base_id);
-          const roleId = resolveRoleId(n, tpl);
-          const h = computeNodeHeight(n);
-          const curMax = roleMaxHeightMap.get(roleId) || CANVAS_DEFAULTS.NODE_HEIGHT;
-          if (h > curMax) roleMaxHeightMap.set(roleId, h);
-        });
-      });
-
       const roleYMap = new Map<string, { y: number; height: number }>();
-      diagRoles.forEach((role, rIdx) => {
-        const maxNodeH = roleMaxHeightMap.get(role.id) || CANVAS_DEFAULTS.NODE_HEIGHT;
-        let laneHeight = Math.max(CANVAS_DEFAULTS.LANE_MIN_HEIGHT, maxNodeH + 48);
-        if (role.custom_height !== undefined && role.custom_height > 0) {
-          laneHeight = Math.max(laneHeight, role.custom_height);
-        }
-        roleYMap.set(role.id, { y: currentLaneY, height: laneHeight });
+      if (diagRoles.length === 0) {
+        // Visual placeholder swimlane so the diagram has spacious, clickable canvas area
+        const emptyLaneHeight = 120;
         swimlanes.push({
-          id: `${diag.id}_${role.id}_${rIdx}`,
+          id: `${diag.id}_empty_lane`,
           diagramId: diag.id,
-          roleId: role.id,
-          roleName: role.name,
-          color: role.color,
+          roleId: '__empty__',
+          roleName: 'Chưa có làn bơi (Swimlane)',
+          color: '#94A3B8',
           y: currentLaneY,
-          height: laneHeight,
+          height: emptyLaneHeight,
           width: 0,
+          isEmptyPlaceholder: true,
         });
-        currentLaneY += laneHeight;
-      });
+        currentLaneY += emptyLaneHeight;
+      } else {
+        const roleMaxHeightMap = new Map<string, number>();
+        diagRoles.forEach((r) => roleMaxHeightMap.set(r.id, CANVAS_DEFAULTS.NODE_HEIGHT));
+
+        diag.frames.forEach((frame) => {
+          frame.nodes.forEach((n) => {
+            const tpl = templateMap.get(n.base_id);
+            const roleId = resolveRoleId(n, tpl);
+            const h = computeNodeHeight(n);
+            const curMax = roleMaxHeightMap.get(roleId) || CANVAS_DEFAULTS.NODE_HEIGHT;
+            if (h > curMax) roleMaxHeightMap.set(roleId, h);
+          });
+        });
+
+        diagRoles.forEach((role, rIdx) => {
+          const maxNodeH = roleMaxHeightMap.get(role.id) || CANVAS_DEFAULTS.NODE_HEIGHT;
+          let laneHeight = Math.max(CANVAS_DEFAULTS.LANE_MIN_HEIGHT, maxNodeH + 48);
+          if (role.custom_height !== undefined && role.custom_height > 0) {
+            laneHeight = Math.max(laneHeight, role.custom_height);
+          }
+          roleYMap.set(role.id, { y: currentLaneY, height: laneHeight });
+          swimlanes.push({
+            id: `${diag.id}_${role.id}_${rIdx}`,
+            diagramId: diag.id,
+            roleId: role.id,
+            roleName: role.name,
+            color: role.color,
+            y: currentLaneY,
+            height: laneHeight,
+            width: 0,
+          });
+          currentLaneY += laneHeight;
+        });
+      }
 
       // 3. Position Frames and Nodes along X-axis
       let currentX = startX;
@@ -311,7 +351,11 @@ export class LayoutEngine {
 
             let nodeY = laneInfo.y + (laneInfo.height - nodeHeight) / 2;
             if (!isSpecial && nodeInst.custom_y !== undefined) {
-              nodeY = nodeInst.custom_y;
+              const minY = laneInfo.y + 4;
+              const maxY = laneInfo.y + laneInfo.height - nodeHeight - 4;
+              if (nodeInst.custom_y >= minY && nodeInst.custom_y <= maxY) {
+                nodeY = nodeInst.custom_y;
+              }
             }
 
             const layoutNode: LayoutNode = {
@@ -436,7 +480,10 @@ export class LayoutEngine {
         return true;
       });
 
-      const diagRoutes = diag.edge_routes || schema.edge_routes || {};
+      const diagRoutes =
+        diag.edge_routes ||
+        (diag.id === activeDiagramId ? schema.edge_routes : undefined) ||
+        {};
       const requests: RouteRequest[] = uniqueEdges.map((e) => {
         const key = `${e.fromInstanceId}>${e.toInstanceId}`;
         const routeOverride = diagRoutes[key];
@@ -490,8 +537,8 @@ export class LayoutEngine {
         });
       });
 
-      // Vertical gap before next diagram below
-      currentDiagramTopY = currentLaneY + 60;
+      // Vertical gap before next diagram below (generous spacing for side-by-side comparison)
+      currentDiagramTopY = currentLaneY + 80;
     });
 
     const totalWidth = Math.max(1200, maxContentWidthAcrossAll + 120);

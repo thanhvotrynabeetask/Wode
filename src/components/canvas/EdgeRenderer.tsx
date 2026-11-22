@@ -45,6 +45,7 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
   return (
     <g
       className="select-none cursor-pointer group"
+      onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
         if (onClick) onClick();

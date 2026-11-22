@@ -161,72 +161,171 @@ export function getPortStubPoint(p: Point, side: BorderSide, dist: number = PORT
 }
 
 /**
+ * Calculates the exact port point on one of the 4 sides of a node.
+ * If totalCount === 1: sits exactly in the center/middle of that side.
+ * If totalCount > 1: evenly spaces the ports along the side, symmetrically centered around the middle.
+ */
+export function getNodeSidePort(
+  node: { x: number; y: number; width: number; height: number },
+  side: BorderSide,
+  index: number = 0,
+  totalCount: number = 1
+): Point {
+  const centerX = node.x + node.width / 2;
+  const centerY = node.y + node.height / 2;
+
+  if (totalCount <= 1) {
+    switch (side) {
+      case 'top':
+        return { x: Math.round(centerX), y: Math.round(node.y) };
+      case 'bottom':
+        return { x: Math.round(centerX), y: Math.round(node.y + node.height) };
+      case 'left':
+        return { x: Math.round(node.x), y: Math.round(centerY) };
+      case 'right':
+      default:
+        return { x: Math.round(node.x + node.width), y: Math.round(centerY) };
+    }
+  }
+
+  // Multi-edge distribution: evenly spaced, centered in the middle of the side
+  const isHorizontal = side === 'top' || side === 'bottom';
+  const totalLength = isHorizontal ? node.width : node.height;
+  const margin = Math.min(12, totalLength * 0.1);
+  const availableLength = Math.max(10, totalLength - 2 * margin);
+  const maxSpacing = 20;
+  const spacing = Math.min(maxSpacing, availableLength / (totalCount - 1));
+  const offset = (index - (totalCount - 1) / 2) * spacing;
+
+  switch (side) {
+    case 'top':
+      return { x: Math.round(centerX + offset), y: Math.round(node.y) };
+    case 'bottom':
+      return { x: Math.round(centerX + offset), y: Math.round(node.y + node.height) };
+    case 'left':
+      return { x: Math.round(node.x), y: Math.round(centerY + offset) };
+    case 'right':
+    default:
+      return { x: Math.round(node.x + node.width), y: Math.round(centerY + offset) };
+  }
+}
+
+/**
  * Calculates absolute coordinates of a border anchor point on a node.
+ * Strictly anchored to the center of the specified side.
  */
 export function anchorToPoint(
   node: { x: number; y: number; width: number; height: number },
   anchor?: NodeBorderAnchor
 ): Point {
-  if (!anchor) {
-    return { x: node.x + node.width, y: Math.round(node.y + node.height / 2) };
-  }
-  const ratio = Math.max(0.05, Math.min(0.95, anchor.ratio ?? 0.5));
-  switch (anchor.side) {
-    case 'top':
-      return { x: Math.round(node.x + node.width * ratio), y: Math.round(node.y) };
-    case 'bottom':
-      return { x: Math.round(node.x + node.width * ratio), y: Math.round(node.y + node.height) };
-    case 'left':
-      return { x: Math.round(node.x), y: Math.round(node.y + node.height * ratio) };
-    case 'right':
-    default:
-      return { x: Math.round(node.x + node.width), y: Math.round(node.y + node.height * ratio) };
-  }
+  return getNodeSidePort(node, anchor?.side || 'right', 0, 1);
 }
 
 /**
- * Projects any point in canvas space onto the closest point on the node's borderline.
- * Guaranteed to stay strictly on the borderline.
+ * Determines which of the 4 border sides ('top' | 'right' | 'bottom' | 'left')
+ * a given point is closest to relative to the node.
  */
-export function pointToBorderAnchor(
+export function pointToBorderSide(
   node: { x: number; y: number; width: number; height: number },
   point: Point
-): NodeBorderAnchor {
+): BorderSide {
   const minX = node.x;
   const maxX = node.x + node.width;
   const minY = node.y;
   const maxY = node.y + node.height;
 
-  // Clamped coordinates
+  // Clamped coordinates on the node bounding box
   const cx = Math.max(minX, Math.min(maxX, point.x));
   const cy = Math.max(minY, Math.min(maxY, point.y));
 
-  // Distances to the 4 borders
-  const distLeft = Math.abs(point.x - minX);
-  const distRight = Math.abs(point.x - maxX);
-  const distTop = Math.abs(point.y - minY);
-  const distBottom = Math.abs(point.y - maxY);
+  // Distances to the 4 border segments
+  const distLeft = Math.hypot(point.x - minX, point.y - cy);
+  const distRight = Math.hypot(point.x - maxX, point.y - cy);
+  const distTop = Math.hypot(point.x - cx, point.y - minY);
+  const distBottom = Math.hypot(point.x - cx, point.y - maxY);
 
   const minDist = Math.min(distLeft, distRight, distTop, distBottom);
 
-  const snapRatio = (raw: number) => {
-    // Keep at least 8% away from corners to look clean
-    const clamped = Math.max(0.08, Math.min(0.92, raw));
-    // Snap to exact center 0.5 if nearby
-    if (Math.abs(clamped - 0.5) < 0.08) return 0.5;
-    // Snap to 0.05 increments
-    return Math.round(clamped * 20) / 20;
-  };
+  if (minDist === distLeft) return 'left';
+  if (minDist === distRight) return 'right';
+  if (minDist === distTop) return 'top';
+  return 'bottom';
+}
 
-  if (minDist === distLeft) {
-    return { side: 'left', ratio: snapRatio((cy - minY) / (node.height || 1)) };
-  } else if (minDist === distRight) {
-    return { side: 'right', ratio: snapRatio((cy - minY) / (node.height || 1)) };
-  } else if (minDist === distTop) {
-    return { side: 'top', ratio: snapRatio((cx - minX) / (node.width || 1)) };
+/**
+ * Maps any canvas point to one of the 4 border sides, locked to the middle (ratio 0.5).
+ */
+export function pointToBorderAnchor(
+  node: { x: number; y: number; width: number; height: number },
+  point: Point
+): NodeBorderAnchor {
+  return {
+    side: pointToBorderSide(node, point),
+    ratio: 0.5,
+  };
+}
+
+/**
+ * Computes the distributed port for a specific edge on a node, taking into account
+ * other edges currently attached to that same side of the node.
+ */
+export function getNodePortForEdge(
+  node: { x: number; y: number; width: number; height: number; instanceId?: string },
+  side: BorderSide,
+  currentEdgeId: string,
+  counterpartNode: { x: number; y: number; width: number; height: number },
+  allEdges: { id: string; fromInstanceId: string; toInstanceId: string; sourceAnchor?: NodeBorderAnchor; targetAnchor?: NodeBorderAnchor }[],
+  allNodes: { instanceId: string; x: number; y: number; width: number; height: number }[]
+): Point {
+  const nodeInstId = node.instanceId;
+  const nodeMap = new Map(allNodes.map((n) => [n.instanceId, n]));
+
+  // Find all edges that attach to this node on this side
+  const conns: { edgeId: string; otherX: number; otherY: number }[] = [];
+
+  allEdges.forEach((e) => {
+    if (e.id === currentEdgeId) return; // Will add with current counterpart below
+    if (!nodeInstId) return;
+
+    if (e.fromInstanceId === nodeInstId) {
+      const eSide = e.sourceAnchor?.side || 'right';
+      if (eSide === side) {
+        const other = nodeMap.get(e.toInstanceId);
+        conns.push({
+          edgeId: e.id,
+          otherX: other ? other.x + other.width / 2 : 0,
+          otherY: other ? other.y + other.height / 2 : 0,
+        });
+      }
+    } else if (e.toInstanceId === nodeInstId) {
+      const eSide = e.targetAnchor?.side || 'left';
+      if (eSide === side) {
+        const other = nodeMap.get(e.fromInstanceId);
+        conns.push({
+          edgeId: e.id,
+          otherX: other ? other.x + other.width / 2 : 0,
+          otherY: other ? other.y + other.height / 2 : 0,
+        });
+      }
+    }
+  });
+
+  // Add the current edge
+  conns.push({
+    edgeId: currentEdgeId,
+    otherX: counterpartNode.x + counterpartNode.width / 2,
+    otherY: counterpartNode.y + counterpartNode.height / 2,
+  });
+
+  // Sort along the edge to avoid line crossings
+  if (side === 'left' || side === 'right') {
+    conns.sort((a, b) => a.otherY - b.otherY || a.otherX - b.otherX || a.edgeId.localeCompare(b.edgeId));
   } else {
-    return { side: 'bottom', ratio: snapRatio((cx - minX) / (node.width || 1)) };
+    conns.sort((a, b) => a.otherX - b.otherX || a.otherY - b.otherY || a.edgeId.localeCompare(b.edgeId));
   }
+
+  const myIndex = Math.max(0, conns.findIndex((c) => c.edgeId === currentEdgeId));
+  return getNodeSidePort(node, side, myIndex, conns.length);
 }
 
 /**
@@ -271,11 +370,27 @@ export function buildOrthogonalConnector(
       pts = [start, pStart, { x: pStart.x, y: escapeY }, { x: midX, y: escapeY }, { x: midX, y: pEnd.y }, pEnd, end];
     }
   } else if (isStartHorizontal && !isEndHorizontal) {
-    // Horizontal start, Vertical end: corner at { x: pEnd.x, y: pStart.y }
-    pts = [start, pStart, { x: pEnd.x, y: pStart.y }, pEnd, end];
+    // Horizontal start (left/right), Vertical end (top/bottom)
+    const canDirectTurn = (startSide === 'right' ? pStart.x <= pEnd.x : pStart.x >= pEnd.x) &&
+                          (endSide === 'top' ? pStart.y <= pEnd.y : pStart.y >= pEnd.y);
+    if (canDirectTurn) {
+      pts = [start, pStart, { x: pEnd.x, y: pStart.y }, pEnd, end];
+    } else {
+      const escapeX = startSide === 'right' ? Math.max(pStart.x, pEnd.x) + 20 : Math.min(pStart.x, pEnd.x) - 20;
+      const cornerY = endSide === 'top' ? pEnd.y - 20 : pEnd.y + 20;
+      pts = [start, pStart, { x: escapeX, y: pStart.y }, { x: escapeX, y: cornerY }, { x: pEnd.x, y: cornerY }, pEnd, end];
+    }
   } else {
-    // Vertical start, Horizontal end: corner at { x: pStart.x, y: pEnd.y }
-    pts = [start, pStart, { x: pStart.x, y: pEnd.y }, pEnd, end];
+    // Vertical start (top/bottom), Horizontal end (left/right)
+    const canDirectTurn = (startSide === 'bottom' ? pStart.y <= pEnd.y : pStart.y >= pEnd.y) &&
+                          (endSide === 'left' ? pStart.x <= pEnd.x : pStart.x >= pEnd.x);
+    if (canDirectTurn) {
+      pts = [start, pStart, { x: pStart.x, y: pEnd.y }, pEnd, end];
+    } else {
+      const escapeY = startSide === 'bottom' ? Math.max(pStart.y, pEnd.y) + 20 : Math.min(pStart.y, pEnd.y) - 20;
+      const cornerX = endSide === 'left' ? pEnd.x - 20 : pEnd.x + 20;
+      pts = [start, pStart, { x: pStart.x, y: escapeY }, { x: cornerX, y: escapeY }, { x: cornerX, y: pEnd.y }, pEnd, end];
+    }
   }
 
   return simplifyPolyline(pts);
@@ -316,48 +431,98 @@ export function extractWaypoints(points: Point[]): Point[] {
     .map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
 }
 
-interface PortAssignment {
-  out: Map<string, number>;
-  in: Map<string, number>;
+export interface PortAssignmentMap {
+  start: Map<string, Point>;
+  end: Map<string, Point>;
 }
 
-function spreadPortOffsets(count: number): number[] {
-  if (count === 1) return [0];
-  if (count <= 3) return Array.from({ length: count }, (_, i) => (i - (count - 1) / 2) * GRID * 2);
-  return Array.from({ length: count }, (_, i) => (i - Math.floor((count - 1) / 2)) * GRID);
-}
-
-function assignPorts(requests: RouteRequest[], nodeById: Map<string, RouterNode>): PortAssignment {
-  const result: PortAssignment = { out: new Map(), in: new Map() };
-  const centerY = (n: RouterNode) => n.y + n.height / 2;
-
-  const allocate = (side: 'out' | 'in') => {
-    const groups = new Map<string, RouteRequest[]>();
-    requests.forEach((r) => {
-      const ownerId = side === 'out' ? r.fromId : r.toId;
-      if (!groups.has(ownerId)) groups.set(ownerId, []);
-      groups.get(ownerId)!.push(r);
-    });
-
-    groups.forEach((group, ownerId) => {
-      const owner = nodeById.get(ownerId)!;
-      const counterpart = (r: RouteRequest) => nodeById.get(side === 'out' ? r.toId : r.fromId)!;
-      // Sorting by where the other end sits keeps the fan of lines from crossing itself.
-      group.sort((a, b) => {
-        const na = counterpart(a);
-        const nb = counterpart(b);
-        return centerY(na) - centerY(nb) || na.x - nb.x;
-      });
-      const base = snap(centerY(owner));
-      const offsets = spreadPortOffsets(group.length);
-      group.forEach((r, i) => {
-        result[side].set(r.key, base + offsets[i]);
-      });
-    });
+/**
+ * Universally assigns port coordinates for all 4 sides of every node.
+ * If 1 flow on a side: placed exactly at the middle (ratio 0.5).
+ * If multiple flows on the same side: arranged evenly spaced, symmetrically centered around the middle.
+ */
+export function assignUniversalPorts(
+  requests: RouteRequest[],
+  nodeById: Map<string, RouterNode>
+): PortAssignmentMap {
+  const result: PortAssignmentMap = {
+    start: new Map(),
+    end: new Map(),
   };
 
-  allocate('out');
-  allocate('in');
+  interface SideConn {
+    request: RouteRequest;
+    isSource: boolean;
+    otherNode: RouterNode;
+  }
+
+  const groups = new Map<string, SideConn[]>();
+
+  requests.forEach((r) => {
+    const fromNode = nodeById.get(r.fromId);
+    const toNode = nodeById.get(r.toId);
+    if (!fromNode || !toNode) return;
+
+    const sourceSide: BorderSide = r.sourceAnchor?.side || 'right';
+    const targetSide: BorderSide = r.targetAnchor?.side || 'left';
+
+    const sourceKey = `${r.fromId}:${sourceSide}`;
+    if (!groups.has(sourceKey)) groups.set(sourceKey, []);
+    groups.get(sourceKey)!.push({
+      request: r,
+      isSource: true,
+      otherNode: toNode,
+    });
+
+    const targetKey = `${r.toId}:${targetSide}`;
+    if (!groups.has(targetKey)) groups.set(targetKey, []);
+    groups.get(targetKey)!.push({
+      request: r,
+      isSource: false,
+      otherNode: fromNode,
+    });
+  });
+
+  groups.forEach((conns, key) => {
+    const colonIdx = key.indexOf(':');
+    const nodeId = key.substring(0, colonIdx);
+    const side = key.substring(colonIdx + 1) as BorderSide;
+    const node = nodeById.get(nodeId);
+    if (!node) return;
+
+    const centerY = (n: RouterNode) => n.y + n.height / 2;
+    const centerX = (n: RouterNode) => n.x + n.width / 2;
+
+    // Sorting connections along the edge avoids crossing lines
+    if (side === 'left' || side === 'right') {
+      conns.sort((a, b) => {
+        return (
+          centerY(a.otherNode) - centerY(b.otherNode) ||
+          centerX(a.otherNode) - centerX(b.otherNode) ||
+          a.request.key.localeCompare(b.request.key)
+        );
+      });
+    } else {
+      conns.sort((a, b) => {
+        return (
+          centerX(a.otherNode) - centerX(b.otherNode) ||
+          centerY(a.otherNode) - centerY(b.otherNode) ||
+          a.request.key.localeCompare(b.request.key)
+        );
+      });
+    }
+
+    const count = conns.length;
+    conns.forEach((conn, index) => {
+      const pt = getNodeSidePort(node, side, index, count);
+      if (conn.isSource) {
+        result.start.set(conn.request.key, pt);
+      } else {
+        result.end.set(conn.request.key, pt);
+      }
+    });
+  });
+
   return result;
 }
 
@@ -634,34 +799,27 @@ export function routeEdges(
     (r) => r.fromId !== r.toId && nodeById.has(r.fromId) && nodeById.has(r.toId)
   );
 
-  const ports = assignPorts(valid, nodeById);
+  const ports = assignUniversalPorts(valid, nodeById);
   const grid = buildGrid(nodes, bounds);
   const routes = new Map<string, { points: Point[]; isManual: boolean }>();
 
   const endpoints = (r: RouteRequest) => {
     const from = nodeById.get(r.fromId)!;
     const to = nodeById.get(r.toId)!;
-    const start = r.sourceAnchor
-      ? anchorToPoint(from, r.sourceAnchor)
-      : { x: from.x + from.width, y: ports.out.get(r.key)! };
-    const end = r.targetAnchor
-      ? anchorToPoint(to, r.targetAnchor)
-      : { x: to.x, y: ports.in.get(r.key)! };
+    const start = ports.start.get(r.key) || getNodeSidePort(from, r.sourceAnchor?.side || 'right', 0, 1);
+    const end = ports.end.get(r.key) || getNodeSidePort(to, r.targetAnchor?.side || 'left', 0, 1);
     const startSide: BorderSide = r.sourceAnchor?.side || 'right';
     const endSide: BorderSide = r.targetAnchor?.side || 'left';
     return { start, end, startSide, endSide };
   };
 
-  // User routes or anchor overrides are laid down first so automatic routes flow around them.
+  // User routes with custom waypoints are laid down first so automatic routes flow around them.
   valid.forEach((r) => {
     const hasWaypoints = Boolean(r.waypoints && r.waypoints.length > 0);
-    const hasCustomAnchors = Boolean(r.sourceAnchor || r.targetAnchor);
-    if (!hasWaypoints && !hasCustomAnchors) return;
+    if (!hasWaypoints) return;
 
     const { start, end, startSide, endSide } = endpoints(r);
-    const manual = hasWaypoints
-      ? buildManualPoints(start, end, r.waypoints!, startSide, endSide)
-      : buildOrthogonalConnector(start, end, startSide, endSide);
+    const manual = buildManualPoints(start, end, r.waypoints!, startSide, endSide);
     if (!manual) return;
     registerPolylineOccupancy(grid, manual);
     routes.set(r.key, { points: manual, isManual: true });
@@ -675,7 +833,9 @@ export function routeEdges(
     })
     .sort((a, b) => a.span - b.span)
     .forEach(({ r, start, end, startSide, endSide }) => {
-      routes.set(r.key, { points: routeAutomatically(grid, start, end, startSide, endSide), isManual: false });
+      const hasCustomAnchors = Boolean(r.sourceAnchor || r.targetAnchor);
+      const points = routeAutomatically(grid, start, end, startSide, endSide);
+      routes.set(r.key, { points, isManual: hasCustomAnchors });
     });
 
   const obstacles: Rect[] = nodes.map((n) => ({ x: n.x, y: n.y, w: n.width, h: n.height }));
