@@ -65,7 +65,7 @@ Whether you access Wode via the **hosted web deployment (Vercel)** or run it **l
 
 ### Option 1: Try It on the Web (Hosted Deployment)
 If you just want to preview or design a workflow right away:
-* Open the deployment link: `https://<your-wode-deployment>.vercel.app` *(or author's hosted URL)*.
+* Open the deployment link: `wode-beta.vercel.app` *(or author's hosted URL)*.
 * Full access to diagram authoring, `.json` file saving, and standalone `.html` exports.
 * Switch between **English** and **Tiếng Việt** anytime via Settings or the header globe button.
 
