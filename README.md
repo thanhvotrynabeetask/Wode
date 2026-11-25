@@ -9,9 +9,18 @@
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v4-38B2AC.svg)](https://tailwindcss.com/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Connector-emerald.svg)](https://modelcontextprotocol.io/)
+[![Live Demo](https://img.shields.io/badge/Demo-wode--beta.vercel.app-blueviolet?logo=vercel)](https://wode-beta.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Data Privacy](https://img.shields.io/badge/Data%20Privacy-100%25%20Client--Side-green.svg)](#-data-sovereignty--privacy-guarantee-100-client-side)
 
+</div>
+
+<!-- Showcase Demo Preview / GIF: Drop demo.gif into docs/demo.gif to display live animation -->
+<div align="center">
+  <a href="https://wode-beta.vercel.app" target="_blank" rel="noopener noreferrer">
+    <img src="docs/demo.gif" alt="Wode Live Demo" width="100%" style="max-width: 960px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);" onerror="this.onerror=null; this.src='docs/social-preview.svg';" />
+  </a>
+  <p><em>👉 <a href="https://wode-beta.vercel.app"><strong>Try Live Web App: wode-beta.vercel.app</strong></a> • 100% Client-Side & Offline Ready</em></p>
 </div>
 
 **Wode** is an open-source, local-first workflow diagram builder tailored for designing, visualizing, and automating **Cross-functional Flowcharts (Swimlane Diagrams)**. 
@@ -65,7 +74,7 @@ Whether you access Wode via the **hosted web deployment (Vercel)** or run it **l
 
 ### Option 1: Try It on the Web (Hosted Deployment)
 If you just want to preview or design a workflow right away:
-* Open the deployment link: `wode-beta.vercel.app` *(or author's hosted URL)*.
+* Open the live web app directly: [https://wode-beta.vercel.app](https://wode-beta.vercel.app).
 * Full access to diagram authoring, `.json` file saving, and standalone `.html` exports.
 * Switch between **English** and **Tiếng Việt** anytime via Settings or the header globe button.
 

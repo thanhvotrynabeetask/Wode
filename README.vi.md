@@ -9,9 +9,18 @@
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v4-38B2AC.svg)](https://tailwindcss.com/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Connector-emerald.svg)](https://modelcontextprotocol.io/)
+[![Live Demo](https://img.shields.io/badge/Demo-wode--beta.vercel.app-blueviolet?logo=vercel)](https://wode-beta.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Data Privacy](https://img.shields.io/badge/Data%20Privacy-100%25%20Client--Side-green.svg)](#-cam-kết-tự-chủ-dữ-liệu--quyền-riêng-tư-100)
 
+</div>
+
+<!-- Showcase Demo Preview / GIF: Thả file demo.gif vào docs/demo.gif để hiển thị animation thực tế -->
+<div align="center">
+  <a href="https://wode-beta.vercel.app" target="_blank" rel="noopener noreferrer">
+    <img src="docs/demo.gif" alt="Wode Live Demo" width="100%" style="max-width: 960px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);" onerror="this.onerror=null; this.src='docs/social-preview.svg';" />
+  </a>
+  <p><em>👉 <a href="https://wode-beta.vercel.app"><strong>Trải Nghiệm Trực Tiếp Web App: wode-beta.vercel.app</strong></a> • 100% Client-Side & Offline Ready</em></p>
 </div>
 
 **Wode** là công cụ mã nguồn mở (Open Source) chuyên biệt dùng để thiết kế, trực quan hóa và tự động hóa các sơ đồ quy trình nghiệp vụ phân làn (**Cross-functional Flowchart / Swimlane Diagram**). 
@@ -64,7 +73,7 @@ Dù bạn chọn sử dụng qua **link web triển khai trên Vercel** hay **ch
 
 ### Lựa Chọn 1: Sử Dụng Ngay Trên Web (Deploy Link)
 Nếu bạn cần xem nhanh hoặc thiết kế sơ đồ tức thì mà không muốn cài đặt môi trường lập trình:
-* Truy cập link demo/deploy: `wode-beta.vercel.app` *(hoặc link tác giả cung cấp)*.
+* Truy cập link trải nghiệm trực tiếp: [https://wode-beta.vercel.app](https://wode-beta.vercel.app).
 * Bạn vẫn có toàn bộ tính năng vẽ sơ đồ, xuất/nhập file `.json` và file `.html` offline.
 * Có thể đổi ngôn ngữ giao diện (English / Tiếng Việt) trong phần **Cài đặt** hoặc nút chuyển nhanh ở thanh Header.
 

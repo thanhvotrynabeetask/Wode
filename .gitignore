@@ -7,3 +7,7 @@ dist
 .vercel
 .DS_Store
 *.log
+app_execution.log
+build_log.txt
+build_out.txt
+session_*.json

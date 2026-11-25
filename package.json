@@ -2,7 +2,26 @@
   "name": "wode",
   "private": true,
   "version": "1.0.0",
+  "description": "Deterministic local-first swimlane workflow builder with real-time MCP connector for AI agents",
+  "homepage": "https://wode-beta.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thanhvotrynabeetask/Wode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thanhvotrynabeetask/Wode/issues"
+  },
   "license": "MIT",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "swimlane",
+    "flowchart",
+    "workflow",
+    "ai-agents",
+    "local-first",
+    "diagram"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

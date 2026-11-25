@@ -1,7 +1,26 @@
 {
   "name": "wode-mcp-server",
   "version": "1.0.0",
-  "description": "MCP connector server for Wode Diagram Builder",
+  "description": "MCP connector server for Wode Swimlane Diagram Builder",
+  "homepage": "https://wode-beta.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thanhvotrynabeetask/Wode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thanhvotrynabeetask/Wode/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "swimlane",
+    "flowchart",
+    "workflow",
+    "ai-agents",
+    "local-first",
+    "diagram"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "bin": {
