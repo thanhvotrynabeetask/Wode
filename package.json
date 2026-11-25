@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "mcp": "node mcp-server/dist/index.js",
+    "mcp:setup": "npm --prefix mcp-server install && npm --prefix mcp-server run build",
     "mcp:dev": "npm --prefix mcp-server run dev",
     "mcp:build": "npm --prefix mcp-server run build"
   },

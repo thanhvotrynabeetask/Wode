@@ -3,6 +3,7 @@ import { NodeTemplate, NodeKind } from '../../types/schema';
 import { NodeCard } from './NodeCard';
 import { NODE_KIND_META } from '../../utils/nodeKind';
 import { ChevronDown, ChevronRight, Plus, Database, ArrowLeftRight } from 'lucide-react';
+import { useTranslation } from '../../i18n';
 
 interface SpecialNodeGroupProps {
   kind: Exclude<NodeKind, 'standard'>;
@@ -29,6 +30,9 @@ export const SpecialNodeGroup: React.FC<SpecialNodeGroupProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const meta = NODE_KIND_META[kind];
+  const { t } = useTranslation();
+  const groupLabel = kind === 'storage' ? t('palette.storageGroupTitle') : t('palette.mediatorGroupTitle');
+  const groupHint = kind === 'storage' ? t('palette.storageHint') : t('palette.mediatorHint');
 
   return (
     <div className="border-b border-gray-200/80 bg-white">
@@ -48,7 +52,7 @@ export const SpecialNodeGroup: React.FC<SpecialNodeGroupProps> = ({
           >
             {kind === 'storage' ? <Database size={11} /> : <ArrowLeftRight size={11} />}
           </span>
-          <span className="text-xs font-semibold text-gray-800 truncate">{meta.label}</span>
+          <span className="text-xs font-semibold text-gray-800 truncate">{groupLabel}</span>
           <span className="text-[10px] bg-gray-200/80 text-gray-600 rounded-full px-1.5 shrink-0">
             {templates.length}
           </span>
@@ -56,7 +60,7 @@ export const SpecialNodeGroup: React.FC<SpecialNodeGroupProps> = ({
 
         <button
           onClick={onAddTemplate}
-          title={`Thêm ${meta.label.toLowerCase()} mới`}
+          title={`${t('common.add')} ${groupLabel}`}
           className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors ml-2 shrink-0"
         >
           <Plus size={14} />
@@ -65,15 +69,15 @@ export const SpecialNodeGroup: React.FC<SpecialNodeGroupProps> = ({
 
       {!collapsed && (
         <div className="p-2.5 space-y-2 bg-gray-50/30">
-          <p className="text-[10px] text-gray-400 leading-snug">{meta.hint}</p>
+          <p className="text-[10px] text-gray-400 leading-snug">{groupHint}</p>
           {templates.length === 0 ? (
             <div className="text-center py-3 px-2 border border-dashed border-gray-200 rounded-lg">
-              <p className="text-[11px] text-gray-400 mb-1.5">Chưa có mẫu {meta.label.toLowerCase()}</p>
+              <p className="text-[11px] text-gray-400 mb-1.5">{t('palette.unusedWarning')}</p>
               <button
                 onClick={onAddTemplate}
                 className="inline-flex items-center gap-1 text-[11px] text-blue-600 font-medium hover:underline"
               >
-                <Plus size={12} /> Tạo mới
+                <Plus size={12} /> {t('common.add')}
               </button>
             </div>
           ) : (

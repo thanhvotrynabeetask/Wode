@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/35400012/README.md)
 # 🌊 Wode - Offline Swimlane Workflow Diagram Builder & AI Agent MCP Connector
 
 <div align="center">

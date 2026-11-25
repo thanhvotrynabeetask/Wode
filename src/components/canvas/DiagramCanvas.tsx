@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react'
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useUIStore } from '../../store/useUIStore';
-import { LayoutEngine, LayoutNode, LayoutEdge, LayoutFrameOverlay } from '../../services/LayoutEngine';
+import { LayoutEngine, LayoutNode, LayoutEdge } from '../../services/LayoutEngine';
 import { SwimlaneRenderer } from './SwimlaneRenderer';
 import { FrameOverlayRenderer } from './FrameOverlayRenderer';
 import { EdgeRenderer } from './EdgeRenderer';
@@ -22,10 +22,10 @@ import {
 } from '../../services/EdgeRouter';
 import { BorderSide, NodeBorderAnchor } from '../../types/schema';
 import { CanvasSubToolbar } from './CanvasSubToolbar';
-import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useGlobalKeybindings } from '../../hooks/useGlobalKeybindings';
 import { CANVAS_DEFAULTS } from '../../utils/constants';
 import { Check } from 'lucide-react';
+import { useTranslation } from '../../i18n';
 
 interface MultiDragItem {
   node: LayoutNode;
@@ -44,6 +44,7 @@ interface MultiDragState {
 export const DiagramCanvas: React.FC = () => {
   const schema = useProjectStore((s) => s.schema);
   const { theme, enableDarkGlow } = useSettingsStore();
+  const { t } = useTranslation();
   const {
     updateNodePosition,
     updateMultipleNodesPositions,
@@ -55,6 +56,7 @@ export const DiagramCanvas: React.FC = () => {
     setEdgeRoute,
     clearAllEdgeRoutes,
     setActiveDiagram,
+    updateFrameWidth,
   } = useProjectStore();
 
   const {
@@ -109,14 +111,43 @@ export const DiagramCanvas: React.FC = () => {
     moved: boolean;
   } | null>(null);
 
-  const [frameTransferConfirm, setFrameTransferConfirm] = useState<{
-    node: LayoutNode;
-    sourceFrameTitle: string;
-    targetFrame: LayoutFrameOverlay;
-    newX: number;
-    assignedRoleId?: string;
-    insertIndex: number;
+  // Horizontal Frame resizing state
+  const [frameResizeState, setFrameResizeState] = useState<{
+    frameId: string;
+    startX: number;
+    initialWidth: number;
   } | null>(null);
+
+  const handleFrameResizeStart = (e: React.MouseEvent, frameId: string, currentWidth: number) => {
+    e.stopPropagation();
+    setFrameResizeState({
+      frameId,
+      startX: e.clientX,
+      initialWidth: currentWidth,
+    });
+  };
+
+  // Horizontal Frame resize drag listener
+  useEffect(() => {
+    if (!frameResizeState) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = (e.clientX - frameResizeState.startX) / zoom;
+      const newWidth = Math.max(120, Math.round(frameResizeState.initialWidth + deltaX));
+      updateFrameWidth(frameResizeState.frameId, newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setFrameResizeState(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [frameResizeState, zoom, updateFrameWidth]);
 
   // Auto-alignment snap guideline state during node drag
   const [snapGuide, setSnapGuide] = useState<{
@@ -508,14 +539,15 @@ export const DiagramCanvas: React.FC = () => {
         const insertIndex = layout.nodes.filter(
           (n) => n.frameId === targetFrame.frameId && n.x + n.width / 2 < primaryCenterX
         ).length;
-        setFrameTransferConfirm({
-          node: multiDragState.primaryNode,
-          sourceFrameTitle: multiDragState.primaryNode.frameTitle,
-          targetFrame,
-          newX: primaryFinalX,
-          assignedRoleId: primaryOffset?.assignedRoleId,
-          insertIndex,
-        });
+        // Seamless transfer across frames without any annoying confirm guardrail dialog
+        moveNodeToFrame(
+          multiDragState.primaryNode.frameId,
+          targetFrame.frameId,
+          multiDragState.primaryNode.instanceId,
+          primaryFinalX,
+          primaryOffset?.assignedRoleId,
+          insertIndex
+        );
       } else {
         if (multiDragState.items.length === 1) {
           const item = multiDragState.items[0];
@@ -668,8 +700,8 @@ export const DiagramCanvas: React.FC = () => {
       });
     }
 
-    const sideName = side === 'top' ? 'trên' : side === 'bottom' ? 'dưới' : side === 'left' ? 'trái' : 'phải';
-    addToast('info', `Đã chuyển điểm chạm ${type === 'start' ? 'đầu nguồn' : 'đầu đích'} sang cạnh ${sideName}.`);
+    const sideName = side === 'top' ? t('canvas.sideTop') : side === 'bottom' ? t('canvas.sideBottom') : side === 'left' ? t('canvas.sideLeft') : t('canvas.sideRight');
+    addToast('info', t('canvas.edgeAnchorSwitched', { endpoint: type === 'start' ? t('canvas.sourceNodeFallback') : t('canvas.targetNodeFallback'), side: sideName }));
   };
 
   const routeEditEdge = routeEditKey ? layout.edges.find((ed) => ed.routeKey === routeEditKey) : null;
@@ -791,7 +823,7 @@ export const DiagramCanvas: React.FC = () => {
           const end = Math.max(anchorIndex, targetIndex);
           const rangeIds = diagNodes.slice(start, end + 1).map((n) => n.instanceId);
           setSelectedInstances(rangeIds);
-          addToast('info', `Đã chọn ${rangeIds.length} nhiệm vụ theo luồng`);
+          addToast('info', t('canvas.flowTasksSelected', { count: rangeIds.length }));
         }
       } else {
         setSelectedInstance(instanceId);
@@ -871,18 +903,8 @@ export const DiagramCanvas: React.FC = () => {
         targetAnchor: updates.target_anchor,
       });
     }
-    addToast('success', 'Đã cập nhật thuộc tính luồng dữ liệu.');
+    addToast('success', t('canvas.flowUpdated'));
     setEditingEdge(null);
-  };
-
-  const handleConfirmFrameTransfer = () => {
-    if (!frameTransferConfirm) return;
-    const { node, targetFrame, newX, assignedRoleId, insertIndex } = frameTransferConfirm;
-    moveNodeToFrame(node.frameId, targetFrame.frameId, node.instanceId, newX, assignedRoleId, insertIndex);
-    setSelectedFrame(targetFrame.frameId);
-    setSelectedInstance(node.instanceId);
-    addToast('success', `Đã chuyển "${node.title}" sang ${targetFrame.title}`);
-    setFrameTransferConfirm(null);
   };
 
   const fromNode = editingEdge ? layout.nodes.find((n) => n.instanceId === editingEdge.fromInstanceId) : null;
@@ -975,7 +997,7 @@ export const DiagramCanvas: React.FC = () => {
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => {
                   setActiveDiagram(dh.id);
-                  addToast('info', `Đã chọn ${dh.title} để chỉnh sửa.`);
+                  addToast('info', t('canvas.activeDiagramToast', { title: dh.title }));
                 }}
                 className="cursor-pointer group select-none"
               >
@@ -1027,21 +1049,21 @@ export const DiagramCanvas: React.FC = () => {
                   fontSize={11}
                   fontWeight={500}
                 >
-                  • {dh.frameCount} phân đoạn ({dh.nodeCount} nhiệm vụ)
+                  {t('canvas.diagramSummary', { frameCount: dh.frameCount, nodeCount: dh.nodeCount })}
                 </text>
                 {/* Status badge at right */}
                 {dh.isActive ? (
                   <g transform={`translate(${Math.max(dh.x + 380, dh.x + dh.width - 150)}, ${dh.y + 8})`}>
                     <rect x={0} y={0} width={138} height={20} rx={10} fill="#3B82F6" fillOpacity={isDark ? 0.3 : 0.12} />
                     <text x={69} y={14} textAnchor="middle" fill="#2563EB" fontSize={10} fontWeight={700}>
-                      ● Đang chọn chỉnh sửa
+                      {t('canvas.activeEditing')}
                     </text>
                   </g>
                 ) : (
                   <g transform={`translate(${Math.max(dh.x + 380, dh.x + dh.width - 150)}, ${dh.y + 8})`}>
                     <rect x={0} y={0} width={138} height={20} rx={10} fill={isDark ? '#1E293B' : '#E2E8F0'} />
                     <text x={69} y={14} textAnchor="middle" fill={isDark ? '#94A3B8' : '#64748B'} fontSize={10} fontWeight={500}>
-                      Bấm để chọn sửa
+                      {t('canvas.clickToSelect')}
                     </text>
                   </g>
                 )}
@@ -1061,6 +1083,8 @@ export const DiagramCanvas: React.FC = () => {
           <FrameOverlayRenderer
             frames={layout.frames}
             selectedFrameId={selection.selectedFrameId}
+            onSelectFrame={(frameId) => setSelectedFrame(frameId)}
+            onResizeFrameStart={handleFrameResizeStart}
           />
 
           {/* Layer 3: Edges (Interactive & Smart Anti-overlapping) */}
@@ -1186,7 +1210,7 @@ export const DiagramCanvas: React.FC = () => {
                   <g transform={`translate(${snapGuide.pos + 8}, ${(snapGuide.start + snapGuide.end) / 2 - 10})`}>
                     <rect x="0" y="0" width="84" height="20" rx="4" fill="#0F172A" stroke="#38BDF8" strokeWidth={1} fillOpacity={0.9} />
                     <text x="6" y="14" fontSize="10" fontWeight="600" fill="#38BDF8" fontFamily="system-ui, sans-serif">
-                      ✓ Thẳng hàng
+                      {t('canvas.alignedBadge')}
                     </text>
                   </g>
                 </g>
@@ -1246,8 +1270,8 @@ export const DiagramCanvas: React.FC = () => {
               >
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  <span className="font-semibold text-amber-600 dark:text-amber-400">Đang uốn luồng:</span>
-                  <span>Chọn 1 trong 4 cạnh Node để đổi điểm chạm • Kéo ô vàng để uốn</span>
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">{t('canvas.editingFlowRoute')}</span>
+                  <span>{t('canvas.editingFlowRouteHint')}</span>
                 </div>
 
                 <div className="w-px h-4 bg-gray-200 dark:bg-slate-700" />
@@ -1258,21 +1282,21 @@ export const DiagramCanvas: React.FC = () => {
                   disabled={!routeEditEdge.isManualRoute}
                   onClick={() => {
                     setEdgeRoute(routeEditEdge.routeKey, null);
-                    addToast('info', 'Đã trả luồng về tự động định tuyến.');
+                    addToast('info', t('canvas.routeAutoToast'));
                   }}
-                  title="Xóa đường vẽ tay, đưa về tự động"
+                  title={t('canvas.resetToAutoTitle')}
                 >
-                  Tự động lại
+                  {t('canvas.resetToAutoBtn')}
                 </button>
 
                 <button
                   type="button"
                   className="flex items-center gap-1 font-bold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 px-2.5 py-1 rounded-md text-xs shadow-xs transition-colors"
                   onClick={() => setRouteEditKey(null)}
-                  title="Hoàn tất chỉnh sửa đường đi (Phím tắt: Enter hoặc Esc)"
+                  title={t('canvas.doneBtnTitle')}
                 >
                   <Check size={13} />
-                  <span>Xong (Enter)</span>
+                  <span>{t('canvas.doneBtn')}</span>
                 </button>
               </div>
             ) : (
@@ -1285,10 +1309,10 @@ export const DiagramCanvas: React.FC = () => {
                 }`}
                 onClick={() => {
                   clearAllEdgeRoutes();
-                  addToast('info', `Đã đặt lại ${manualRouteCount} đường thủ công về tự động.`);
+                  addToast('info', t('canvas.resetManualRoutesToast', { count: manualRouteCount }));
                 }}
               >
-                Đặt lại {manualRouteCount} đường thủ công
+                {t('canvas.resetManualRoutes', { count: manualRouteCount })}
               </button>
             )}
           </div>
@@ -1299,19 +1323,19 @@ export const DiagramCanvas: React.FC = () => {
           <div className={`backdrop-blur-xs border rounded-lg px-2.5 py-1 shadow-xs text-[11px] flex items-center gap-2 ${
             isDark ? 'bg-slate-900/90 border-slate-800 text-slate-400' : 'bg-white/90 border-gray-200/90 text-gray-500'
           }`}>
-            <span><strong>{schema.roles.length}</strong> Làn</span>
+            <span><strong>{schema.roles.length}</strong> {t('canvas.statusLanes', { count: '' }).trim()}</span>
             {schema.frames.length > 0 && (
               <>
                 <span>•</span>
-                <span><strong>{schema.frames.length}</strong> Phân đoạn</span>
+                <span><strong>{schema.frames.length}</strong> {t('canvas.statusPhases', { count: '' }).trim()}</span>
               </>
             )}
             <span>•</span>
-            <span><strong>{layout.nodes.length}</strong> Nhiệm vụ</span>
+            <span><strong>{layout.nodes.length}</strong> {t('canvas.statusTasks', { count: '' }).trim()}</span>
             {selection.selectedInstanceIds.length > 0 && (
               <>
                 <span>•</span>
-                <span className="font-semibold text-blue-500">Đã chọn {selection.selectedInstanceIds.length}</span>
+                <span className="font-semibold text-blue-500">{t('canvas.selectedCount', { count: selection.selectedInstanceIds.length })}</span>
               </>
             )}
           </div>
@@ -1323,8 +1347,8 @@ export const DiagramCanvas: React.FC = () => {
         isOpen={Boolean(editingEdge)}
         onClose={() => setEditingEdge(null)}
         edge={editingEdge}
-        fromNodeTitle={fromNode?.title || 'Node nguồn'}
-        toNodeTitle={toNode?.title || 'Node đích'}
+        fromNodeTitle={fromNode?.title || t('canvas.sourceNodeFallback')}
+        toNodeTitle={toNode?.title || t('canvas.targetNodeFallback')}
         onSave={handleSaveEdge}
         onEditRoute={() => {
           if (editingEdge) setRouteEditKey(editingEdge.routeKey);
@@ -1332,24 +1356,10 @@ export const DiagramCanvas: React.FC = () => {
         onResetRoute={() => {
           if (editingEdge) {
             setEdgeRoute(editingEdge.routeKey, null);
-            addToast('info', 'Đã trả luồng về tự động định tuyến.');
+            addToast('info', t('canvas.routeAutoToast'));
           }
         }}
       />
-
-      {/* Frame Transfer Confirmation Dialog */}
-      {frameTransferConfirm && (
-        <ConfirmDialog
-          isOpen={true}
-          title="Chuyển Phân Đoạn (Frame Transfer)"
-          message={`Bạn đã kéo nhiệm vụ "${frameTransferConfirm.node.title}" sang phân đoạn "${frameTransferConfirm.targetFrame.title}". Bạn có muốn chuyển nhiệm vụ này sang phân đoạn mới không?`}
-          confirmLabel="Chuyển phân đoạn"
-          cancelLabel="Giữ nguyên"
-          variant="primary"
-          onConfirm={handleConfirmFrameTransfer}
-          onCancel={() => setFrameTransferConfirm(null)}
-        />
-      )}
     </div>
   );
 };

@@ -6,7 +6,7 @@ let globalWs: WebSocket | null = null;
 
 export function useMCPLiveSync() {
   const [isConnected, setIsConnected] = useState(false);
-  const loadSchema = useProjectStore((s) => s.loadSchema);
+  const handleMCPUpdate = useProjectStore((s) => s.handleMCPUpdate);
   const addToast = useUIStore((s) => s.addToast);
 
   useEffect(() => {
@@ -33,8 +33,8 @@ export function useMCPLiveSync() {
           try {
             const data = JSON.parse(event.data);
             if (data.type === 'SCHEMA_UPDATE' && data.schema) {
-              loadSchema(data.schema);
-              addToast('info', `🤖 ${data.message || 'AI Agent đã cập nhật sơ đồ qua MCP!'}`);
+              handleMCPUpdate(data.schema, data.message);
+              addToast('info', `🤖 ${data.message || 'AI Agent đã cập nhật sơ đồ trong tab Agent!'}`);
             }
           } catch (err) {
             console.warn('[Wode MCP LiveSync] Lỗi phân tích thông điệp:', err);
@@ -68,7 +68,7 @@ export function useMCPLiveSync() {
         globalWs = null;
       }
     };
-  }, [loadSchema, addToast]);
+  }, [handleMCPUpdate, addToast]);
 
   return { isConnected };
 }

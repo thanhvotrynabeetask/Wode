@@ -41,6 +41,7 @@ export interface NodeInstance {
   title: string;
   custom_label: string | null;
   node_kind?: NodeKind;
+  column?: number; // Optional column index within its frame for vertical alignment
   custom_x?: number;
   custom_y?: number;
   assigned_role_id?: string;

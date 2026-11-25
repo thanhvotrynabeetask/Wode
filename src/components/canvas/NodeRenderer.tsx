@@ -4,6 +4,7 @@ import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
 import { Database, ArrowLeftRight, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { NODE_KIND_META } from '../../utils/nodeKind';
 import { LISTING_ITEM_SYMBOLS } from '../../types/schema';
+import { useTranslation } from '../../i18n';
 
 interface NodeRendererProps {
   node: LayoutNode;
@@ -38,6 +39,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
   onUpdateSize,
   zoom = 1,
 }) => {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(node.customLabel || '');
   const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
@@ -253,7 +255,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                   e.stopPropagation();
                   if (onToggleListings) onToggleListings(node.instanceId);
                 }}
-                title={listingsExpanded ? 'Thu gọn danh sách' : 'Mở danh sách'}
+                title={listingsExpanded ? t('canvas.collapseList') : t('canvas.expandList')}
               >
                 {listingsExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               </button>
@@ -279,7 +281,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
               >
                 <textarea
                   autoFocus
-                  placeholder="Thêm mô tả (Shift+Enter để xuống dòng)..."
+                  placeholder={t('builder.customNotePlaceholder')}
                   value={editText}
                   rows={Math.max(2, Math.min(6, editText.split('\n').length))}
                   onChange={(e) => setEditText(e.target.value)}
@@ -313,7 +315,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                     type="button"
                     onClick={handleSaveEdit}
                     className="p-1 text-green-500 hover:bg-green-500/10 rounded"
-                    title="Lưu (Enter)"
+                    title={t('builder.saveEnter')}
                   >
                     <Check size={12} />
                   </button>
@@ -321,7 +323,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                     type="button"
                     onClick={() => setIsEditing(false)}
                     className="p-1 text-gray-400 hover:bg-gray-500/10 rounded"
-                    title="Hủy (Esc)"
+                    title={t('builder.cancelEsc')}
                   >
                     <X size={12} />
                   </button>
@@ -347,7 +349,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                   </p>
                 ) : (
                   <span className="text-[10px] text-gray-400 italic">
-                    (Nhấp đúp để thêm chú thích)
+                    {t('canvas.doubleClickToAddNote')}
                   </span>
                 )}
 
@@ -374,7 +376,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                 {/* Listing count badge when collapsed */}
                 {hasListings && !listingsExpanded && (
                   <span className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                    📋 {node.listings!.length} mục
+                    {t('builder.itemsCount', { count: node.listings!.length })}
                   </span>
                 )}
               </>

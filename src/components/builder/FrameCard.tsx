@@ -13,6 +13,7 @@ import {
   X,
   Network,
 } from 'lucide-react';
+import { useTranslation } from '../../i18n';
 
 interface FrameCardProps {
   frame: Frame;
@@ -57,6 +58,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
   onUpdateEdges,
   onUpdateNextFrameTarget,
 }) => {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(frame.title);
@@ -138,7 +140,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
 
           {/* Node Count */}
           <span className="text-[10px] text-gray-400 shrink-0">
-            ({frame.nodes.length} node)
+            {t('builder.nodeCount', { count: frame.nodes.length })}
           </span>
         </div>
 
@@ -151,7 +153,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                 setEditingTitle(true);
                 setTitleText(frame.title);
               }}
-              title="Sửa tiêu đề Frame"
+              title={t('builder.editTitle')}
               className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-gray-200/50"
             >
               <Edit2 size={12} />
@@ -162,7 +164,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                 e.stopPropagation();
                 onMoveUp();
               }}
-              title="Di chuyển Frame lên trước"
+              title={t('builder.moveUp')}
               className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200/50 disabled:opacity-20"
             >
               <ChevronUp size={13} />
@@ -173,7 +175,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                 e.stopPropagation();
                 onMoveDown();
               }}
-              title="Di chuyển Frame xuống sau"
+              title={t('builder.moveDown')}
               className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200/50 disabled:opacity-20"
             >
               <ChevronDown size={13} />
@@ -183,7 +185,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                 e.stopPropagation();
                 onRemoveFrame();
               }}
-              title="Xóa Frame này"
+              title={t('builder.deleteFrame')}
               className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
             >
               <Trash2 size={12} />
@@ -199,10 +201,10 @@ export const FrameCard: React.FC<FrameCardProps> = ({
           {frame.nodes.length === 0 ? (
             <div className="text-center py-4 px-2 border border-dashed border-gray-200 rounded-lg">
               <p className="text-[11px] text-gray-400">
-                Chưa có nhiệm vụ nào trong phân đoạn này.
+                {t('builder.emptyFrameHint')}
               </p>
               <p className="text-[10px] text-gray-400 mt-0.5">
-                Chuyển sang tab "Kho Node" và bấm <strong>+ Thêm</strong> để đưa vào.
+                {t('builder.emptyFrameHintDesc')}
               </p>
             </div>
           ) : (
@@ -242,7 +244,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                 className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline"
               >
                 <Network size={12} />
-                {showEdgeConfig ? 'Ẩn cấu hình nối dây' : 'Tùy biến nối dây (Edges)'}
+                {showEdgeConfig ? t('builder.hideEdgeConfig') : t('builder.showEdgeConfig')}
                 {frame.edges_config.length > 0 && (
                   <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.2 rounded-full ml-1">
                     {frame.edges_config.length}
@@ -267,7 +269,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
             <div className="pt-2 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between text-xs">
               <span className="text-[11px] text-gray-500 dark:text-slate-400 flex items-center gap-1">
                 <GitBranch size={12} className="text-amber-500" />
-                Rẽ nhánh tiếp:
+                {t('builder.nextPhase')}
               </span>
               <select
                 value={frame.next_frame_target || ''}
@@ -277,7 +279,7 @@ export const FrameCard: React.FC<FrameCardProps> = ({
                 onClick={(e) => e.stopPropagation()}
                 className="text-[11px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-gray-700 dark:text-slate-200 outline-none max-w-[140px] truncate"
               >
-                <option value="">Tuần tự (Frame tiếp theo)</option>
+                <option value="">{t('builder.autoSequential')}</option>
                 {otherFrames.map((f) => (
                   <option key={f.frame_id} value={f.frame_id}>
                     #{f.order} {f.title}

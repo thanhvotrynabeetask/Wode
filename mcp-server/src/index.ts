@@ -55,6 +55,12 @@ server.tool(
           role: z.string().describe('Tên hoặc ID của Role/Swimlane sở hữu node này'),
           title: z.string().describe('Tiêu đề ngắn gọn của nhiệm vụ / bước xử lý (ví dụ: "Nhập thông tin giao hàng")'),
           customLabel: z.string().optional().describe('Mô tả chi tiết nội dung hoặc payload của bước này'),
+          column: z
+            .number()
+            .optional()
+            .describe(
+              'Chỉ số cột (0, 1, 2...) trong frame. Các node ở làn khác nhau có cùng cột sẽ tự động xếp thẳng đứng, giúp đường nối đi từ trên xuống dưới gọn gàng, tránh chéo luồng.'
+            ),
           cornerSymbol: z
             .enum(['user-action', 'bot', 'check', 'timer', 'none'])
             .optional()
@@ -237,6 +243,7 @@ server.tool(
     role: z.string().describe('Tên hoặc ID của Role / Làn bơi'),
     title: z.string().describe('Tiêu đề nhiệm vụ'),
     customLabel: z.string().optional().describe('Mô tả chi tiết / ghi chú cho nhiệm vụ'),
+    column: z.number().optional().describe('Chỉ số cột (0, 1, 2...) trong frame để căn thẳng đứng với node ở làn khác'),
     cornerSymbol: z.enum(['user-action', 'bot', 'check', 'timer', 'none']).optional().default('user-action'),
     nodeKind: z.enum(['standard', 'storage', 'mediator']).optional().default('standard'),
     filePath: z.string().optional(),

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { ProjectSchema, Role, NodeTemplate, Frame, NodeInstance, EdgeConfig, NodeBorderAnchor, EdgeRoute, DiagramSection } from '../types/schema';
+import { ProjectSchema, Role, NodeTemplate, Frame, NodeInstance, EdgeConfig, NodeBorderAnchor, EdgeRoute, DiagramSection, TabSession } from '../types/schema';
+import { LayoutEngine, LayoutNode, LayoutFrameOverlay } from '../services/LayoutEngine';
 
 import { generateRoleId, generateNodeId, generateFrameId, generateInstanceId, generateDiagramId, generateDuplicateTitle } from '../utils/idGenerator';
 import { formatISOTimestamp } from '../utils/dateFormat';
@@ -11,6 +12,16 @@ interface ProjectState {
   future: ProjectSchema[];
   isDirty: boolean;
   currentFilePath: string | null;
+
+  // Multi-Tab Session Management (Separates User from MCP Agent)
+  tabs: TabSession[];
+  activeTabId: string;
+  createTab: (title?: string, type?: 'user' | 'agent', initialSchema?: ProjectSchema) => string;
+  switchTab: (tabId: string) => void;
+  closeTab: (tabId: string) => void;
+  renameTab: (tabId: string, newTitle: string) => void;
+  handleMCPUpdate: (schema: ProjectSchema, message?: string) => void;
+  clearCanvas: () => void;
 
   // History & Undo/Redo
   undo: () => void;
@@ -40,6 +51,7 @@ interface ProjectState {
   // Frames
   addFrame: (title: string) => void;
   updateFrameTitle: (frameId: string, title: string) => void;
+  updateFrameWidth: (frameId: string, customWidth: number) => void;
   removeFrame: (frameId: string) => void;
   reorderFrames: (orderedIds: string[]) => void;
 
@@ -103,7 +115,7 @@ interface ProjectState {
 const createEmptySchema = (): ProjectSchema => {
   const initialDiagram: DiagramSection = {
     id: 'diag_1',
-    title: 'Sơ đồ 1',
+    title: 'Diagram 1',
     order: 1,
     frames: [],
     nodes: [],
@@ -138,7 +150,7 @@ export function syncActiveDiagramToDiagrams(schema: ProjectSchema): DiagramSecti
       : [
           {
             id: activeId,
-            title: schema.metadata?.project_name || 'Sơ đồ 1',
+            title: schema.metadata?.project_name || 'Diagram 1',
             order: 1,
             roles: schema.roles || [],
             node_palette: schema.node_palette || [],
@@ -191,7 +203,7 @@ export function updateActiveDiagramInSchema(
       : [
           {
             id: activeId,
-            title: schema.metadata?.project_name || 'Sơ đồ 1',
+            title: schema.metadata?.project_name || 'Diagram 1',
             order: 1,
             roles: schema.roles || [],
             node_palette: schema.node_palette || [],
@@ -231,15 +243,208 @@ const pushHistory = (past: ProjectSchema[], current: ProjectSchema): ProjectSche
   return newPast;
 };
 
-export const useProjectStore = create<ProjectState>()((set, get) => ({
-  schema: createEmptySchema(),
-  past: [],
-  future: [],
-  isDirty: false,
-  currentFilePath: null,
+const defaultTabId = 'tab_default';
+const defaultInitialSchema = createEmptySchema();
+const initialTabs: TabSession[] = [
+  {
+    id: defaultTabId,
+    title: 'Workspace 1',
+    type: 'user',
+    schema: defaultInitialSchema,
+    past: [],
+    future: [],
+    isDirty: false,
+    currentFilePath: null,
+  },
+];
 
-  canUndo: () => get().past.length > 0,
-  canRedo: () => get().future.length > 0,
+export const useProjectStore = create<ProjectState>()((setOriginal, get) => {
+  const set: typeof setOriginal = (partial) => {
+    setOriginal((state) => {
+      const next = typeof partial === 'function' ? (partial as any)(state) : partial;
+      if (!next) return state;
+
+      const nextSchema = next.schema !== undefined ? next.schema : state.schema;
+      const nextPast = next.past !== undefined ? next.past : state.past;
+      const nextFuture = next.future !== undefined ? next.future : state.future;
+      const nextDirty = next.isDirty !== undefined ? next.isDirty : state.isDirty;
+      const nextFilePath = next.currentFilePath !== undefined ? next.currentFilePath : state.currentFilePath;
+
+      const nextTabs = next.tabs !== undefined
+        ? next.tabs
+        : (state.tabs || []).map((t) =>
+            t.id === (next.activeTabId || state.activeTabId)
+              ? {
+                  ...t,
+                  schema: nextSchema,
+                  past: nextPast,
+                  future: nextFuture,
+                  isDirty: nextDirty,
+                  currentFilePath: nextFilePath,
+                }
+              : t
+          );
+
+      return {
+        ...next,
+        tabs: nextTabs,
+      };
+    });
+  };
+
+  return {
+    schema: defaultInitialSchema,
+    past: [],
+    future: [],
+    isDirty: false,
+    currentFilePath: null,
+
+    tabs: initialTabs,
+    activeTabId: defaultTabId,
+
+    createTab: (title, type = 'user', initialSchema) => {
+      const newId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const schema = initialSchema || createEmptySchema();
+      const currentTabs = get().tabs;
+      const newTitle = title || (type === 'agent' ? '🤖 Agent Session' : `Workspace ${currentTabs.length + 1}`);
+
+      const newTab: TabSession = {
+        id: newId,
+        title: newTitle,
+        type,
+        schema,
+        past: [],
+        future: [],
+        isDirty: false,
+        currentFilePath: null,
+      };
+
+      set((s) => ({
+        tabs: [...s.tabs, newTab],
+        activeTabId: newId,
+        schema: newTab.schema,
+        past: [],
+        future: [],
+        isDirty: false,
+        currentFilePath: null,
+      }));
+
+      return newId;
+    },
+
+    switchTab: (targetTabId) => {
+      set((s) => {
+        if (targetTabId === s.activeTabId) return s;
+        const targetTab = s.tabs.find((t) => t.id === targetTabId);
+        if (!targetTab) return s;
+
+        const updatedTabs = s.tabs.map((t) =>
+          t.id === targetTabId ? { ...t, hasUnreadUpdate: false } : t
+        );
+
+        return {
+          tabs: updatedTabs,
+          activeTabId: targetTabId,
+          schema: targetTab.schema,
+          past: targetTab.past,
+          future: targetTab.future,
+          isDirty: targetTab.isDirty,
+          currentFilePath: targetTab.currentFilePath,
+        };
+      });
+    },
+
+    closeTab: (tabId) => {
+      set((s) => {
+        if (s.tabs.length <= 1) return s;
+        const nextTabs = s.tabs.filter((t) => t.id !== tabId);
+        if (s.activeTabId === tabId) {
+          const nextActive = nextTabs[nextTabs.length - 1];
+          return {
+            tabs: nextTabs,
+            activeTabId: nextActive.id,
+            schema: nextActive.schema,
+            past: nextActive.past,
+            future: nextActive.future,
+            isDirty: nextActive.isDirty,
+            currentFilePath: nextActive.currentFilePath,
+          };
+        }
+        return { tabs: nextTabs };
+      });
+    },
+
+    renameTab: (tabId, newTitle) => {
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title: newTitle } : t)),
+      }));
+    },
+
+    handleMCPUpdate: (mcpSchema, _message) => {
+      set((s) => {
+        const agentTab = s.tabs.find((t) => t.type === 'agent');
+        let nextTabs: TabSession[];
+        let targetTabId: string;
+
+        if (agentTab) {
+          targetTabId = agentTab.id;
+          nextTabs = s.tabs.map((t) =>
+            t.id === agentTab.id
+              ? {
+                  ...t,
+                  title: mcpSchema.metadata?.project_name ? `🤖 ${mcpSchema.metadata.project_name}` : t.title,
+                  schema: mcpSchema,
+                  past: pushHistory(t.past, t.schema),
+                  future: [],
+                  isDirty: false,
+                  hasUnreadUpdate: s.activeTabId !== t.id,
+                }
+              : t
+          );
+        } else {
+          targetTabId = `tab_agent_${Date.now()}`;
+          const newAgentTab: TabSession = {
+            id: targetTabId,
+            title: mcpSchema.metadata?.project_name ? `🤖 ${mcpSchema.metadata.project_name}` : '🤖 Agent (MCP)',
+            type: 'agent',
+            schema: mcpSchema,
+            past: [],
+            future: [],
+            isDirty: false,
+            currentFilePath: null,
+            hasUnreadUpdate: s.activeTabId !== targetTabId,
+          };
+          nextTabs = [...s.tabs, newAgentTab];
+        }
+
+        if (s.activeTabId === targetTabId) {
+          return {
+            tabs: nextTabs,
+            schema: mcpSchema,
+            past: pushHistory(s.past, s.schema),
+            future: [],
+            isDirty: false,
+          };
+        }
+
+        return {
+          tabs: nextTabs,
+        };
+      });
+    },
+
+    clearCanvas: () => {
+      const empty = createEmptySchema();
+      set((s) => ({
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: empty,
+        isDirty: true,
+      }));
+    },
+
+    canUndo: () => get().past.length > 0,
+    canRedo: () => get().future.length > 0,
 
   undo: () =>
     set((s) => {
@@ -283,7 +488,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       diagrams = [
         {
           id: 'diag_1',
-          title: schema.metadata?.project_name || 'Sơ đồ 1',
+          title: schema.metadata?.project_name || 'Diagram 1',
           order: 1,
           roles: schema.roles || [],
           node_palette: schema.node_palette || [],
@@ -331,7 +536,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         : [
             {
               id: activeId,
-              title: s.schema.metadata?.project_name || 'Sơ đồ 1',
+              title: s.schema.metadata?.project_name || 'Diagram 1',
               order: 1,
               roles: s.schema.roles || [],
               node_palette: s.schema.node_palette || [],
@@ -705,23 +910,100 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       };
     }),
 
+  updateFrameWidth: (frameId, customWidth) =>
+    set((s) => {
+      const currentLayout = LayoutEngine.calculate(s.schema);
+      const framePosMap = new Map<string, { x: number; width: number }>();
+      currentLayout.frames.forEach((f: LayoutFrameOverlay) => {
+        framePosMap.set(f.frameId, { x: f.x + 15, width: f.width });
+      });
+
+      const updatedFrames = s.schema.frames.map((f) => {
+        const fl = framePosMap.get(f.frame_id);
+        const lockedX = f.custom_x !== undefined ? f.custom_x : fl?.x;
+        if (f.frame_id === frameId) {
+          return {
+            ...f,
+            custom_x: lockedX,
+            custom_width: Math.max(80, Math.round(customWidth)),
+          };
+        }
+        return {
+          ...f,
+          custom_x: lockedX,
+        };
+      });
+
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        isDirty: true,
+      };
+    }),
+
   removeFrame: (frameId) =>
     set((s) => {
+      // 1. Snapshot the exact current canvas layout before removing the frame
+      const currentLayout = LayoutEngine.calculate(s.schema);
+      const nodePosMap = new Map<string, { x: number; y: number }>();
+      currentLayout.nodes.forEach((n: LayoutNode) => {
+        nodePosMap.set(n.instanceId, { x: n.x, y: n.y });
+      });
+      const framePosMap = new Map<string, { x: number; width: number }>();
+      currentLayout.frames.forEach((f: LayoutFrameOverlay) => {
+        framePosMap.set(f.frameId, { x: f.x + 15, width: f.width });
+      });
+
       const frameToRemove = s.schema.frames.find((f) => f.frame_id === frameId);
+
+      // 2. Lock coordinates of all remaining frames and their nodes
       const updatedFrames = s.schema.frames
         .filter((f) => f.frame_id !== frameId)
-        .map((f, i) => ({ ...f, order: i + 1 }));
+        .map((f, i) => {
+          const fl = framePosMap.get(f.frame_id);
+          return {
+            ...f,
+            order: i + 1,
+            custom_x: f.custom_x !== undefined ? f.custom_x : fl?.x,
+            custom_width: f.custom_width !== undefined ? f.custom_width : (fl ? fl.width - 30 : undefined),
+            nodes: f.nodes.map((n) => {
+              const np = nodePosMap.get(n.instance_id);
+              return {
+                ...n,
+                custom_x: n.custom_x !== undefined ? n.custom_x : np?.x,
+              };
+            }),
+          };
+        });
 
-      // If all frames were removed, preserve the nodes as standalone nodes
-      const newStandaloneNodes =
-        updatedFrames.length === 0 && frameToRemove
-          ? [...(s.schema.nodes || []), ...frameToRemove.nodes]
-          : s.schema.nodes || [];
+      // 3. For nodes in the removed frame: freeze their exact canvas coordinates so they do not move a single pixel
+      const frameNodes = (frameToRemove?.nodes || []).map((n) => {
+        const np = nodePosMap.get(n.instance_id);
+        return {
+          ...n,
+          custom_x: n.custom_x !== undefined ? n.custom_x : np?.x,
+        };
+      });
+      const frameEdges = frameToRemove?.edges_config || [];
 
-      const newStandaloneEdges =
-        updatedFrames.length === 0 && frameToRemove
-          ? [...(s.schema.edges_config || []), ...(frameToRemove.edges_config || [])]
-          : s.schema.edges_config || [];
+      // 4. For existing standalone nodes: also lock custom_x
+      const existingStandaloneNodes = (s.schema.nodes || []).map((n) => {
+        const np = nodePosMap.get(n.instance_id);
+        return {
+          ...n,
+          custom_x: n.custom_x !== undefined ? n.custom_x : np?.x,
+        };
+      });
+
+      const newStandaloneNodes = [
+        ...existingStandaloneNodes,
+        ...frameNodes,
+      ];
+      const newStandaloneEdges = [
+        ...(s.schema.edges_config || []),
+        ...frameEdges,
+      ];
 
       return {
         past: pushHistory(s.past, s.schema),
@@ -997,6 +1279,9 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   moveNodeToFrame: (fromFrameId, toFrameId, instanceId, newCustomX, assignedRoleId, insertIndex) =>
     set((s) => {
       let movingNode: NodeInstance | null = null;
+      let newStandaloneNodes = [...(s.schema.nodes || [])];
+
+      // Check if node is in a frame
       const updatedFrames = s.schema.frames.map((f) => {
         if (f.frame_id === fromFrameId) {
           movingNode = f.nodes.find((n) => n.instance_id === instanceId) || null;
@@ -1011,6 +1296,14 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         return f;
       });
 
+      // If not found in frames, check standalone nodes
+      if (!movingNode) {
+        movingNode = newStandaloneNodes.find((n) => n.instance_id === instanceId) || null;
+        if (movingNode) {
+          newStandaloneNodes = newStandaloneNodes.filter((n) => n.instance_id !== instanceId);
+        }
+      }
+
       if (!movingNode) return s;
 
       const targetNode = movingNode as NodeInstance;
@@ -1021,21 +1314,37 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         ...(assignedRoleId ? { assigned_role_id: assignedRoleId } : {}),
       };
 
-      const finalFrames = updatedFrames.map((f) => {
-        if (f.frame_id !== toFrameId) return f;
-        const nodes = [...f.nodes];
-        const index =
-          insertIndex === undefined ? nodes.length : Math.max(0, Math.min(insertIndex, nodes.length));
-        nodes.splice(index, 0, finalNode);
-        return { ...f, nodes };
-      });
+      if (toFrameId) {
+        const finalFrames = updatedFrames.map((f) => {
+          if (f.frame_id !== toFrameId) return f;
+          const nodes = [...f.nodes];
+          const index =
+            insertIndex === undefined ? nodes.length : Math.max(0, Math.min(insertIndex, nodes.length));
+          nodes.splice(index, 0, finalNode);
+          return { ...f, nodes };
+        });
 
-      return {
-        past: pushHistory(s.past, s.schema),
-        future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: finalFrames }),
-        isDirty: true,
-      };
+        return {
+          past: pushHistory(s.past, s.schema),
+          future: [],
+          schema: updateActiveDiagramInSchema(s.schema, {
+            frames: finalFrames,
+            nodes: newStandaloneNodes,
+          }),
+          isDirty: true,
+        };
+      } else {
+        newStandaloneNodes.push(finalNode);
+        return {
+          past: pushHistory(s.past, s.schema),
+          future: [],
+          schema: updateActiveDiagramInSchema(s.schema, {
+            frames: updatedFrames,
+            nodes: newStandaloneNodes,
+          }),
+          isDirty: true,
+        };
+      }
     }),
 
   resetNodePositions: () =>
@@ -1214,7 +1523,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     const newOrder = currentDiagrams.length + 1;
     const newDiagram: DiagramSection = {
       id: newId,
-      title: title?.trim() || `Sơ đồ ${newOrder}`,
+      title: title?.trim() || `Diagram ${newOrder}`,
       order: newOrder,
       roles: [], // Sơ đồ mới hoàn toàn: không nhân bản swimlane cũ
       node_palette: [], // Bảng mẫu mới trống hoàn toàn
@@ -1504,4 +1813,5 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     const standaloneCount = (schema.nodes || []).filter((n) => n.base_id === baseId).length;
     return frameCount + standaloneCount;
   },
-}));
+};
+});

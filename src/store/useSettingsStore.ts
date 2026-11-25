@@ -30,6 +30,7 @@ interface SettingsState {
   workspacePath: string | null;
   workspaceHandle: FileSystemDirectoryHandle | null;
   theme: 'light' | 'dark' | 'system';
+  language: 'en' | 'vi';
   enableDarkGlow: boolean;
   keybindings: KeybindingMap;
   lastOpenedFile: string | null;
@@ -37,6 +38,7 @@ interface SettingsState {
   setWorkspacePath: (path: string) => void;
   setWorkspaceHandle: (handle: FileSystemDirectoryHandle | null) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setLanguage: (language: 'en' | 'vi') => void;
   setEnableDarkGlow: (enabled: boolean) => void;
   setKeybinding: (action: keyof KeybindingMap, shortcut: string) => void;
   resetKeybindings: () => void;
@@ -50,6 +52,7 @@ export const useSettingsStore = create<SettingsState>()(
       workspacePath: null,
       workspaceHandle: null,
       theme: 'system',
+      language: 'en',
       enableDarkGlow: true,
       keybindings: { ...DEFAULT_KEYBINDINGS },
       lastOpenedFile: null,
@@ -57,6 +60,7 @@ export const useSettingsStore = create<SettingsState>()(
       setWorkspacePath: (path) => set({ workspacePath: path }),
       setWorkspaceHandle: (handle) => set({ workspaceHandle: handle }),
       setTheme: (theme) => set({ theme }),
+      setLanguage: (language) => set({ language }),
       setEnableDarkGlow: (enableDarkGlow) => set({ enableDarkGlow }),
       setKeybinding: (action, shortcut) =>
         set((s) => ({
@@ -79,6 +83,7 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({
         workspacePath: state.workspacePath,
         theme: state.theme,
+        language: state.language,
         enableDarkGlow: state.enableDarkGlow,
         keybindings: state.keybindings,
         lastOpenedFile: state.lastOpenedFile,

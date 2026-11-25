@@ -10,6 +10,7 @@ import { Button } from '../common/Button';
 import { Plus, Search, Sparkles } from 'lucide-react';
 import { Role, NodeTemplate, NodeKind } from '../../types/schema';
 import { isSpecialKind } from '../../utils/nodeKind';
+import { useTranslation } from '../../i18n';
 
 export const RolePalette: React.FC = () => {
   const {
@@ -27,6 +28,7 @@ export const RolePalette: React.FC = () => {
   } = useProjectStore();
 
   const { selection, addToast } = useUIStore();
+  const { t } = useTranslation();
 
   const [search, setSearch] = useState('');
   const [roleModalOpen, setRoleModalOpen] = useState(false);
@@ -179,7 +181,7 @@ export const RolePalette: React.FC = () => {
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
           <input
             type="text"
-            placeholder="Tìm vai trò hoặc nhiệm vụ..."
+            placeholder={t('palette.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full text-xs pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-200 dark:border-slate-700 rounded-md outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -197,7 +199,7 @@ export const RolePalette: React.FC = () => {
               setRoleModalOpen(true);
             }}
           >
-            Thêm Vai Trò
+            {t('palette.addRole')}
           </Button>
 
           {schema.roles.length === 0 && (
@@ -206,9 +208,9 @@ export const RolePalette: React.FC = () => {
               size="sm"
               icon={<Sparkles size={13} className="text-amber-500" />}
               onClick={handleSeedSampleData}
-              title="Khởi tạo dữ liệu mẫu"
+              title={t('palette.sampleButtonTitle')}
             >
-              Mẫu
+              {t('palette.sampleButton')}
             </Button>
           )}
         </div>
@@ -221,9 +223,9 @@ export const RolePalette: React.FC = () => {
             <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2 text-gray-400">
               <Plus size={20} />
             </div>
-            <p className="text-xs font-medium text-gray-600 mb-1">Chưa có vai trò nào</p>
+            <p className="text-xs font-medium text-gray-600 mb-1">{t('palette.emptyRolesTitle')}</p>
             <p className="text-[11px] text-gray-400 mb-4">
-              Mỗi vai trò (Role) sẽ tương ứng với một làn bơi (Swimlane) trên sơ đồ.
+              {t('palette.emptyRolesDesc')}
             </p>
             <div className="flex flex-col gap-2 max-w-xs mx-auto">
               <Button
@@ -234,7 +236,7 @@ export const RolePalette: React.FC = () => {
                   setRoleModalOpen(true);
                 }}
               >
-                Tạo vai trò đầu tiên
+                {t('palette.createFirstRole')}
               </Button>
               <Button
                 variant="secondary"
@@ -242,7 +244,7 @@ export const RolePalette: React.FC = () => {
                 icon={<Sparkles size={13} className="text-amber-500" />}
                 onClick={handleSeedSampleData}
               >
-                Tạo dữ liệu mẫu nhanh
+                {t('palette.quickSampleButton')}
               </Button>
             </div>
           </div>

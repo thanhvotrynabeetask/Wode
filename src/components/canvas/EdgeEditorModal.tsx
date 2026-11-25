@@ -4,6 +4,7 @@ import { Button } from '../common/Button';
 import { LayoutEdge } from '../../services/LayoutEngine';
 import { FlowType, BorderSide, NodeBorderAnchor } from '../../types/schema';
 import { Palette, Route, Trash2, Crosshair, ArrowRight } from 'lucide-react';
+import { useTranslation } from '../../i18n';
 
 interface EdgeEditorModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
   const [color, setColor] = useState('#64748B');
   const [sourceSide, setSourceSide] = useState<BorderSide>('right');
   const [targetSide, setTargetSide] = useState<BorderSide>('left');
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (edge) {
@@ -83,7 +85,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Tùy Chỉnh Luồng Dữ Liệu (Message Flow)" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('canvas.edgeEditorTitle')} size="md">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Source -> Target Info */}
         <div className="bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700/80 rounded-lg p-2.5 text-xs text-gray-600 dark:text-slate-300 flex items-center justify-between">
@@ -309,7 +311,7 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1 p-1 hover:bg-red-50 dark:hover:bg-red-950/40 rounded"
             >
               <Trash2 size={13} />
-              Xóa luồng
+              {t('canvas.deleteEdge')}
             </button>
           ) : (
             <div />
@@ -317,10 +319,10 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
 
           <div className="flex gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              Hủy
+              {t('common.cancel')}
             </Button>
             <Button type="submit" variant="primary" size="sm">
-              Lưu thay đổi
+              {t('common.save')}
             </Button>
           </div>
         </div>

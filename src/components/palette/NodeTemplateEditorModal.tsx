@@ -6,6 +6,7 @@ import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
 import { Database, UserCheck, ArrowLeftRight } from 'lucide-react';
 import { NODE_KIND_META } from '../../utils/nodeKind';
 import { CANVAS_DEFAULTS } from '../../utils/constants';
+import { useTranslation } from '../../i18n';
 
 interface NodeTemplateEditorModalProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
   const [roleId, setRoleId] = useState('');
   const [cornerSymbol, setCornerSymbol] = useState<CornerSymbol>('user-action');
   const [nodeKind, setNodeKind] = useState<NodeKind>('standard');
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (initialTemplate) {
@@ -73,7 +75,7 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={initialTemplate ? 'Sửa Thẻ Node Mẫu' : 'Tạo Thẻ Node Mẫu Mới'}
+      title={initialTemplate ? t('palette.editNode') : t('palette.addNodeTemplate')}
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -221,10 +223,10 @@ export const NodeTemplateEditorModal: React.FC<NodeTemplateEditorModalProps> = (
 
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Hủy
+            {t('common.cancel')}
           </Button>
           <Button type="submit" variant="primary" size="sm" disabled={!title.trim() || !roleId}>
-            {initialTemplate ? 'Lưu thay đổi' : 'Tạo Node Mẫu'}
+            {initialTemplate ? t('common.save') : t('common.add')}
           </Button>
         </div>
       </form>

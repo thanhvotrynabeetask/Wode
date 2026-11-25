@@ -55,6 +55,7 @@ export interface NodeInstance {
   title: string;
   custom_label: string | null;
   node_kind?: NodeKind;
+  column?: number; // Optional column index within its frame for vertical alignment
   custom_x?: number; // User dragged X offset/position
   custom_y?: number; // Snapped Y position in lane
   assigned_role_id?: string; // If special node was magneted into a specific lane
@@ -92,6 +93,10 @@ export interface Frame {
   nodes: NodeInstance[];
   edges_config: EdgeConfig[];
   next_frame_target?: string | null;
+  /** Custom horizontal width (px) set by user directly on canvas */
+  custom_width?: number;
+  /** Custom horizontal start position (px) on canvas */
+  custom_x?: number;
 }
 
 export interface ProjectMetadata {
@@ -130,4 +135,16 @@ export interface ProjectSchema {
   /** Multi-diagram support: list of diagrams stacked vertically in project */
   diagrams?: DiagramSection[];
   active_diagram_id?: string;
+}
+
+export interface TabSession {
+  id: string;
+  title: string;
+  type: 'user' | 'agent';
+  schema: ProjectSchema;
+  past: ProjectSchema[];
+  future: ProjectSchema[];
+  isDirty: boolean;
+  currentFilePath: string | null;
+  hasUnreadUpdate?: boolean;
 }

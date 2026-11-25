@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Role, NodeTemplate } from '../../types/schema';
 import { NodeCard } from './NodeCard';
 import { ChevronDown, ChevronRight, Plus, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { useTranslation } from '../../i18n';
 
 interface RoleGroupProps {
   role: Role;
@@ -32,6 +33,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { t } = useTranslation();
 
   return (
     <div className="border-b border-gray-200/80 last:border-b-0 bg-white">
@@ -68,7 +70,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
         <div className="flex items-center gap-1 shrink-0 ml-2">
           <button
             onClick={onAddTemplate}
-            title="Thêm thẻ nhiệm vụ vào vai trò này"
+            title={t('palette.addNodeTemplate')}
             className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
           >
             <Plus size={14} />
@@ -94,7 +96,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
                     className="w-full flex items-center gap-1.5 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
                   >
                     <Edit2 size={12} />
-                    Sửa vai trò
+                    {t('palette.editRole')}
                   </button>
                   <button
                     onClick={() => {
@@ -104,7 +106,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
                     className="w-full flex items-center gap-1.5 px-3 py-1.5 text-red-600 hover:bg-red-50"
                   >
                     <Trash2 size={12} />
-                    Xóa vai trò
+                    {t('common.delete')}
                   </button>
                 </div>
               </>
@@ -118,12 +120,12 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
         <div className="p-2.5 space-y-2 bg-gray-50/30">
           {templates.length === 0 ? (
             <div className="text-center py-3 px-2 border border-dashed border-gray-200 rounded-lg">
-              <p className="text-[11px] text-gray-400 mb-1.5">Chưa có nhiệm vụ mẫu nào</p>
+              <p className="text-[11px] text-gray-400 mb-1.5">{t('palette.noSampleTemplates')}</p>
               <button
                 onClick={onAddTemplate}
                 className="inline-flex items-center gap-1 text-[11px] text-blue-600 font-medium hover:underline"
               >
-                <Plus size={12} /> Tạo nhiệm vụ mới
+                <Plus size={12} /> {t('palette.createNewTask')}
               </button>
             </div>
           ) : (

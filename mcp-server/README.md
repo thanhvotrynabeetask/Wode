@@ -9,11 +9,16 @@ Server kết nối (MCP Connector) chuẩn dành cho AI Agent (Antigravity, Clau
 1. **Vẽ Sơ Đồ Toàn Diện Trong 1 Bước (`wode_create_diagram`)**:
    - Agent chỉ cần truyền danh sách vai trò (Roles), các giai đoạn (Frames), các bước công việc (Nodes) và dây nối luồng (Edges).
    - Tự động sinh ID, gán màu sắc thẩm mỹ cho từng làn bơi, liên kết các bước và tính toán thứ tự.
+   - **Tự động căn dọc (Auto-Column):** Tự động phát hiện các bước liên tiếp giữa 2 làn khác nhau và xếp thẳng đứng, giúp đường nối đi thẳng từ trên xuống gọn gàng, giảm 40-50% chiều ngang. Hỗ trợ tham số `column` tùy chọn nếu muốn cố định cột.
+   - **Tự động tách luồng phản hồi:** Luồng `dashed` / loopback tự động uốn vòm lên trên, chữ không bao giờ đè lên luồng chính.
    - Tự động xuất ra cả **File JSON Wode chuẩn** và **File HTML tương tác offline** (hỗ trợ Dark Mode phát sáng).
 
-2. **Live Sync Tự Động Với Ứng Dụng Wode (WebSocket)**:
+2. **Live Sync Tự Động & Cách Ly Luồng (`🤖 Agent (MCP)`)**:
    - Tích hợp sẵn server WebSocket chạy ngầm (`ws://localhost:3333`).
-   - Khi bạn mở ứng dụng web Wode trên trình duyệt, bất cứ khi nào Agent gọi lệnh vẽ hoặc cập nhật sơ đồ qua MCP, biểu đồ trên màn hình web sẽ **tự động vẽ lại theo thời gian thực** mà không cần reload trang hay import thủ công.
+   - Khi bạn mở ứng dụng web Wode trên trình duyệt, bất cứ khi nào Agent gọi lệnh vẽ hoặc cập nhật sơ đồ qua MCP, Wode sẽ **tự động cập nhật vào tab riêng `🤖 Agent (MCP)` theo thời gian thực**, hoàn toàn không đè lên tab bạn đang vẽ dở.
+
+3. **Hướng Dẫn Chuẩn Cho Agent ([instructions.md](instructions.md))**:
+   - Tệp quy chuẩn thiết kế sơ đồ quy trình được nạp sẵn vào MCP, giúp mọi Agent nắm vững nguyên tắc phân làn, phân đoạn, căn thẳng hàng dọc và đặt nhãn ngắn gọn súc tích.
 
 3. **Bộ Công Cụ Thao Tác Chi Tiết (Granular Tools)**:
    - Thêm làn bơi (`wode_add_role`), thêm giai đoạn (`wode_add_frame`), thêm bước (`wode_add_node`).
@@ -52,7 +57,7 @@ Thêm cấu hình:
     "wode": {
       "command": "node",
       "args": [
-        "C:\\Users\\thanh\\Desktop\\project\\Wode\\mcp-server\\dist\\index.js"
+        "<path-to-wode-project>/mcp-server/dist/index.js"
       ],
       "env": {
         "WODE_WS_PORT": "3333"
@@ -70,7 +75,7 @@ Thêm vào `.cursor/mcp.json` (hoặc Cài đặt Cursor > Features > MCP Server
     "wode": {
       "command": "node",
       "args": [
-        "C:\\Users\\thanh\\Desktop\\project\\Wode\\mcp-server\\dist\\index.js"
+        "<path-to-wode-project>/mcp-server/dist/index.js"
       ]
     }
   }
@@ -85,7 +90,7 @@ Thêm vào file cấu hình MCP của workspace hoặc agent:
     "wode": {
       "command": "node",
       "args": [
-        "c:/Users/thanh/Desktop/project/Wode/mcp-server/dist/index.js"
+        "<path-to-wode-project>/mcp-server/dist/index.js"
       ]
     }
   }

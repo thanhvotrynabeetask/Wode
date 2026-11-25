@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Role } from '../../types/schema';
+import { useTranslation } from '../../i18n';
 import { DEFAULT_ROLE_COLORS } from '../../utils/constants';
 
 interface RoleEditorModalProps {
@@ -19,6 +20,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [color, setColor] = useState(DEFAULT_ROLE_COLORS[0]);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (initialRole) {
@@ -41,19 +43,19 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={initialRole ? 'Sửa Vai Trò (Role)' : 'Thêm Vai Trò Mới'}
+      title={initialRole ? t('palette.editRole') : t('palette.addRole')}
       size="sm"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-            Tên vai trò
+            {t('palette.roleModalNameLabel')}
           </label>
           <input
             type="text"
             required
             autoFocus
-            placeholder="Ví dụ: Khách hàng, Hệ thống, Kế toán..."
+            placeholder="e.g. Customer, System, Admin..."
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
@@ -62,7 +64,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
 
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-            Màu nhận diện
+            {t('palette.roleModalColorLabel')}
           </label>
           <div className="flex flex-wrap gap-2.5 mb-2">
             {DEFAULT_ROLE_COLORS.map((c) => (
@@ -90,10 +92,10 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
 
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Hủy
+            {t('common.cancel')}
           </Button>
           <Button type="submit" variant="primary" size="sm" disabled={!name.trim()}>
-            {initialRole ? 'Lưu thay đổi' : 'Thêm vai trò'}
+            {initialRole ? t('common.save') : t('common.add')}
           </Button>
         </div>
       </form>

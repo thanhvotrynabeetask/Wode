@@ -6,6 +6,7 @@ import { FrameNodeSlot } from './FrameNodeSlot';
 import { Button } from '../common/Button';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Plus, Workflow } from 'lucide-react';
+import { useTranslation } from '../../i18n';
 
 export const FrameList: React.FC = () => {
   const {
@@ -22,14 +23,15 @@ export const FrameList: React.FC = () => {
   } = useProjectStore();
 
   const { selection, setSelectedFrame, setSelectedInstance, addToast } = useUIStore();
+  const { t } = useTranslation();
 
   const [deleteConfirmFrameId, setDeleteConfirmFrameId] = useState<string | null>(null);
 
   const handleCreateFrame = () => {
     const nextOrder = schema.frames.length + 1;
-    const defaultTitle = `Giai đoạn ${nextOrder}`;
+    const defaultTitle = `${t('builder.addFrame')} ${nextOrder}`;
     addFrame(defaultTitle);
-    addToast('success', `Đã tạo ${defaultTitle}`);
+    addToast('success', t('builder.phaseCreated', { title: defaultTitle }));
   };
 
   const handleMoveFrame = (index: number, direction: 'up' | 'down') => {
@@ -50,7 +52,7 @@ export const FrameList: React.FC = () => {
       <div className="p-3 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between shrink-0">
         <div>
           <h3 className="text-xs font-bold text-gray-800 dark:text-slate-100 uppercase tracking-wider">
-            Phân Đoạn Quy Trình
+            {t('builder.title')}
           </h3>
           <p className="text-[10px] text-gray-400 dark:text-slate-500">
             {schema.frames.length} Frame(s) • Macro-flow
@@ -64,7 +66,7 @@ export const FrameList: React.FC = () => {
           onClick={handleCreateFrame}
           className="text-xs py-1.5"
         >
-          Thêm Frame
+          {t('builder.addFrame')}
         </Button>
       </div>
 
@@ -77,10 +79,10 @@ export const FrameList: React.FC = () => {
                 <Workflow size={20} />
               </div>
               <p className="text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1">
-                Chưa có phân đoạn nào (Tùy chọn)
+                {t('builder.noFramesOptional')}
               </p>
               <p className="text-[11px] text-gray-400 mb-4 max-w-xs mx-auto">
-                Frame là phần tùy chọn để gom nhóm các nhiệm vụ thành từng giai đoạn cắt ngang các làn bơi. Sơ đồ của bạn hoàn toàn có thể hoạt động mà không cần Frame.
+                {t('builder.noFramesDesc')}
               </p>
               <Button
                 variant="primary"
@@ -89,7 +91,7 @@ export const FrameList: React.FC = () => {
                 onClick={handleCreateFrame}
                 className="mx-auto"
               >
-                Thêm Frame
+                {t('builder.addFrame')}
               </Button>
             </div>
 
@@ -98,9 +100,9 @@ export const FrameList: React.FC = () => {
               <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-800 dark:text-slate-200">
-                    Nhiệm vụ trên sơ đồ ({schema.nodes!.length})
+                    {t('builder.tasksOnDiagram', { count: schema.nodes!.length })}
                   </span>
-                  <span className="text-[10px] text-gray-400">Tự do (Không Frame)</span>
+                  <span className="text-[10px] text-gray-400">{t('builder.standaloneNoFrame')}</span>
                 </div>
                 <div className="space-y-1.5">
                   {schema.nodes!.map((node, nodeIdx) => {
@@ -170,14 +172,17 @@ export const FrameList: React.FC = () => {
       {deleteConfirmFrameId && frameToDelete && (
         <ConfirmDialog
           isOpen={true}
-          title="Xóa Phân Đoạn (Frame)"
-          message={`Bạn có chắc muốn xóa \"${frameToDelete.title}\" cùng toàn bộ ${frameToDelete.nodes.length} nhiệm vụ bên trong?`}
-          confirmLabel="Xóa"
+          title={t('builder.deleteFrameModalTitle')}
+          message={t('builder.deleteFrameModalMessage', {
+            title: frameToDelete.title,
+            count: frameToDelete.nodes.length,
+          })}
+          confirmLabel={t('common.delete')}
           variant="danger"
           onConfirm={() => {
             removeFrame(deleteConfirmFrameId);
             setDeleteConfirmFrameId(null);
-            addToast('info', 'Đã xóa phân đoạn.');
+            addToast('info', t('builder.phaseDeleted'));
           }}
           onCancel={() => setDeleteConfirmFrameId(null)}
         />

@@ -29,6 +29,7 @@ export interface CreateDiagramInput {
     role: string; // Name or ID
     title: string;
     customLabel?: string;
+    column?: number; // Optional column index in frame (0, 1, 2...)
     cornerSymbol?: CornerSymbol;
     nodeKind?: NodeKind;
     listings?: NodeListingItem[];
@@ -152,6 +153,7 @@ export class DiagramManager {
         title: n.title,
         custom_label: n.customLabel || null,
         node_kind: n.nodeKind || 'standard',
+        column: n.column,
         assigned_role_id: matchedRoleId,
         listings: n.listings || [],
       };
@@ -380,6 +382,7 @@ ${htmlPath ? `- File HTML Viewer (Offline): ${htmlPath}` : ''}`;
     role: string;
     title: string;
     customLabel?: string;
+    column?: number;
     cornerSymbol?: CornerSymbol;
     nodeKind?: NodeKind;
     listings?: NodeListingItem[];
@@ -423,6 +426,7 @@ ${htmlPath ? `- File HTML Viewer (Offline): ${htmlPath}` : ''}`;
       title: params.title,
       custom_label: params.customLabel || null,
       node_kind: params.nodeKind || 'standard',
+      column: params.column,
       assigned_role_id: role.id,
       listings: params.listings || [],
     };

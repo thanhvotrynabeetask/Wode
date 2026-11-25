@@ -1,5 +1,6 @@
 import React from 'react';
 import { Header } from './Header';
+import { TabBar } from './TabBar';
 import { Sidebar } from './Sidebar';
 import { RolePalette } from '../palette/RolePalette';
 import { FrameList } from '../builder/FrameList';
@@ -13,6 +14,7 @@ export const AppShell: React.FC = () => {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-gray-100 dark:bg-slate-950">
       <Header />
+      <TabBar />
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
         <div

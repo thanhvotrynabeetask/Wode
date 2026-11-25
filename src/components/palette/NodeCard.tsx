@@ -4,6 +4,7 @@ import { Badge } from '../common/Badge';
 import { CornerSymbolIcon } from '../common/CornerSymbolIcon';
 import { MoreVertical, Edit2, Trash2, Plus, Copy, Database, ArrowLeftRight } from 'lucide-react';
 import { NODE_KIND_META, isSpecialKind } from '../../utils/nodeKind';
+import { useTranslation } from '../../i18n';
 
 interface NodeCardProps {
   template: NodeTemplate;
@@ -27,6 +28,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
   activeFrameTitle,
 }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const { t } = useTranslation();
   const isUnused = usageCount === 0;
   const isStorage = template.node_kind === 'storage';
   const isMediator = template.node_kind === 'mediator';
@@ -111,7 +113,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
                     className="w-full flex items-center gap-1.5 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
                   >
                     <Edit2 size={12} />
-                    Sửa mẫu
+                    {t('palette.editNode')}
                   </button>
                   {onDuplicate && (
                     <button
@@ -122,7 +124,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
                       className="w-full flex items-center gap-1.5 px-3 py-1.5 text-violet-600 hover:bg-violet-50"
                     >
                       <Copy size={12} />
-                      Nhân bản độc lập
+                      {t('palette.duplicateIndependent')}
                     </button>
                   )}
                   <button
@@ -133,7 +135,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
                     className="w-full flex items-center gap-1.5 px-3 py-1.5 text-red-600 hover:bg-red-50"
                   >
                     <Trash2 size={12} />
-                    Xóa mẫu
+                    {t('common.delete')}
                   </button>
                 </div>
               </>
@@ -148,7 +150,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
             className="text-[9px] font-semibold tracking-wider px-1.5 py-0.5 rounded uppercase"
             style={{ color: kindMeta.color, backgroundColor: `${kindMeta.color}1A` }}
           >
-            {kindMeta.tag} • Kéo đổi làn tự do
+            {kindMeta.tag} • {t('palette.crossLaneDrag')}
           </span>
         </div>
       )}
@@ -159,28 +161,28 @@ export const NodeCard: React.FC<NodeCardProps> = ({
           <span className="text-[10px] text-gray-400">
             {isUnused
               ? activeFrameTitle
-                ? `+ Đưa vào ${activeFrameTitle}`
-                : '+ Đưa vào sơ đồ'
-              : 'Đã có trên sơ đồ'}
+                ? t('palette.addToPhase', { phase: activeFrameTitle })
+                : t('palette.addToDiagram')
+              : t('palette.onDiagram')}
           </span>
           {isUnused && onAddToActiveFrame ? (
             <button
               onClick={onAddToActiveFrame}
-              title={activeFrameTitle ? `Đưa vào khung ${activeFrameTitle}` : 'Đưa vào sơ đồ'}
+              title={activeFrameTitle ? t('palette.addToPhase', { phase: activeFrameTitle }) : t('palette.addToDiagram')}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
             >
               <Plus size={12} />
-              Đưa vào
+              {t('common.add')}
             </button>
           ) : (
             onDuplicate && (
               <button
                 onClick={onDuplicate}
-                title="Tạo bản sao độc lập (sửa, xóa riêng biệt)"
+                title={t('palette.duplicateNode')}
                 className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-slate-700 transition-colors"
               >
                 <Copy size={12} />
-                Nhân bản
+                {t('common.duplicate')}
               </button>
             )
           )}

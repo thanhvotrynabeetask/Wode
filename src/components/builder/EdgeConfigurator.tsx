@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { EdgeConfig, NodeInstance, FlowType } from '../../types/schema';
 import { Button } from '../common/Button';
 import { Plus, Trash2, ArrowRight, CornerDownRight, ChevronUp, ChevronDown, GripVertical, Sliders, X } from 'lucide-react';
+import { useTranslation } from '../../i18n';
 
 interface EdgeConfiguratorProps {
   nodes: NodeInstance[];
@@ -16,6 +17,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
   edges,
   onChange,
 }) => {
+  const { t } = useTranslation();
   const [fromInstance, setFromInstance] = useState(nodes[0]?.instance_id || '');
   const [toInstance, setToInstance] = useState(nodes[1]?.instance_id || '');
   const [label, setLabel] = useState('');
@@ -130,21 +132,21 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
       <div className="flex items-center justify-between">
         <span className="font-semibold text-gray-700 flex items-center gap-1.5">
           <CornerDownRight size={13} className="text-blue-500" />
-          Nối dây trong Frame (Micro-flow)
+          {t('builder.microFlowTitle')}
         </span>
         <button
           onClick={handleResetToAuto}
           className="text-[11px] text-blue-600 hover:underline font-medium"
-          title="Tự động nối tuần tự theo thứ tự hiển thị"
+          title={t('builder.autoConnectDesc')}
         >
-          Nối tự động
+          {t('builder.autoConnect')}
         </button>
       </div>
 
       {/* List of current edges */}
       {edges.length === 0 ? (
         <p className="text-[11px] text-gray-400 italic">
-          Đang áp dụng nối tuần tự tự động (mặc định).
+          {t('builder.autoConnectNotice')}
         </p>
       ) : (
         <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
@@ -166,7 +168,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
               >
                 {/* Left: Drag Grip, Order Number, Color */}
                 <div className="flex items-center gap-1 shrink-0">
-                  <span title="Kéo thả để đổi thứ tự dây" className="cursor-grab active:cursor-grabbing shrink-0 flex items-center">
+                  <span title={t('builder.dragToReorder')} className="cursor-grab active:cursor-grabbing shrink-0 flex items-center">
                     <GripVertical size={12} className="text-gray-300 hover:text-gray-600" />
                   </span>
 
@@ -187,7 +189,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                     value={edge.from_instance}
                     onChange={(e) => handleUpdateEdgeEndpoints(idx, e.target.value, edge.to_instance)}
                     className="flex-1 min-w-0 text-[11px] font-semibold bg-gray-50/90 dark:bg-slate-700/80 hover:bg-white dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600 rounded px-1 py-0.5 truncate cursor-pointer text-gray-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    title={`Từ node: ${getNodeTitle(edge.from_instance)} (Bấm để chọn lại node)`}
+                    title={t('builder.fromNodeTooltip', { title: getNodeTitle(edge.from_instance) })}
                   >
                     {nodes.map((n) => (
                       <option key={n.instance_id} value={n.instance_id} disabled={n.instance_id === edge.to_instance}>
@@ -203,7 +205,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                     type="button"
                     onClick={() => handleSwapEdge(idx)}
                     className="p-0.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 rounded transition-colors shrink-0"
-                    title="Đảo chiều luồng (đổi nguồn ⇄ đích)"
+                    title={t('builder.swapDirection')}
                   >
                     <ArrowRight size={11} />
                   </button>
@@ -212,7 +214,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                     value={edge.to_instance}
                     onChange={(e) => handleUpdateEdgeEndpoints(idx, edge.from_instance, e.target.value)}
                     className="flex-1 min-w-0 text-[11px] font-semibold bg-gray-50/90 dark:bg-slate-700/80 hover:bg-white dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600 rounded px-1 py-0.5 truncate cursor-pointer text-gray-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    title={`Đến node: ${getNodeTitle(edge.to_instance)} (Bấm để chọn lại node)`}
+                    title={t('builder.toNodeTooltip', { title: getNodeTitle(edge.to_instance) })}
                   >
                     {nodes.map((n) => (
                       <option key={n.instance_id} value={n.instance_id} disabled={n.instance_id === edge.from_instance}>
@@ -229,7 +231,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                 {edge.message_label && (
                   <span
                     className="text-[9px] text-blue-600 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300 px-1 rounded truncate max-w-[45px] shrink-0"
-                    title={`Thông điệp: "${edge.message_label}"`}
+                    title={t('builder.messageTooltip', { label: edge.message_label })}
                   >
                     "{edge.message_label}"
                   </span>
@@ -238,13 +240,13 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                 {edge.flow_type !== 'solid' && (
                   <span
                     className="text-[9px] text-gray-400 border border-dashed border-gray-300 dark:border-slate-600 px-1 rounded shrink-0 cursor-pointer hover:text-blue-500"
-                    title="Bấm để chuyển kiểu nét"
+                    title={t('builder.clickToChangeStyle')}
                     onClick={() => {
                       const nextType: FlowType = edge.flow_type === 'dashed' ? 'dotted' : 'solid';
                       handleUpdateEdge(idx, { flow_type: nextType });
                     }}
                   >
-                    {edge.flow_type === 'dashed' ? 'đứt' : 'chấm'}
+                    {edge.flow_type === 'dashed' ? t('canvas.styleDashed').slice(0, 6) : t('canvas.styleDotted').slice(0, 6)}
                   </span>
                 )}
 
@@ -258,7 +260,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                         ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/40'
                         : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700'
                     }`}
-                    title="Tùy chỉnh chi tiết (nhãn thông điệp, nét, màu)"
+                    title={t('builder.customEdgeDetails')}
                   >
                     <Sliders size={11} />
                   </button>
@@ -267,7 +269,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                     disabled={idx === 0}
                     onClick={() => handleMoveEdge(idx, 'up')}
                     className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors"
-                    title="Di chuyển dây lên trên"
+                    title={t('builder.moveEdgeUp')}
                   >
                     <ChevronUp size={12} />
                   </button>
@@ -276,7 +278,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                     disabled={idx === edges.length - 1}
                     onClick={() => handleMoveEdge(idx, 'down')}
                     className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors"
-                    title="Di chuyển dây xuống dưới"
+                    title={t('builder.moveEdgeDown')}
                   >
                     <ChevronDown size={12} />
                   </button>
@@ -284,7 +286,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                     type="button"
                     onClick={() => handleRemoveEdge(idx)}
                     className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                    title="Xóa liên kết"
+                    title={t('builder.deleteEdge')}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -296,7 +298,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                 <div className="p-2 bg-blue-50/60 dark:bg-slate-800/90 border border-blue-200 dark:border-blue-900/60 rounded-lg space-y-2 text-[11px] ml-4 animate-in fade-in duration-150">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-gray-700 dark:text-slate-200">
-                      Tùy chỉnh chi tiết luồng #{idx + 1}
+                      {t('builder.edgeDetailsTitle', { number: idx + 1 })}
                     </span>
                     <button
                       type="button"
@@ -308,32 +310,32 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">Nhãn thông điệp trên dây</label>
+                    <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">{t('builder.messageLabel')}</label>
                     <input
                       type="text"
                       value={edge.message_label || ''}
                       onChange={(e) => handleUpdateEdge(idx, { message_label: e.target.value })}
-                      placeholder="Nhập thông điệp luồng (ví dụ: Gửi duyệt, Phản hồi...)"
+                      placeholder={t('builder.messagePlaceholder')}
                       className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 text-[11px] outline-none text-gray-800 dark:text-slate-100 focus:border-blue-500"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">Kiểu nét</label>
+                      <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">{t('builder.lineStyle')}</label>
                       <select
                         value={edge.flow_type || 'solid'}
                         onChange={(e) => handleUpdateEdge(idx, { flow_type: e.target.value as FlowType })}
                         className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-gray-800 dark:text-slate-100"
                       >
-                        <option value="solid">Nét liền</option>
-                        <option value="dashed">Nét đứt</option>
-                        <option value="dotted">Nét chấm</option>
+                        <option value="solid">{t('canvas.styleSolid')}</option>
+                        <option value="dashed">{t('canvas.styleDashed')}</option>
+                        <option value="dotted">{t('canvas.styleDotted')}</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">Màu sắc dây</label>
+                      <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">{t('builder.color')}</label>
                       <div className="flex items-center gap-1 pt-1">
                         {PRESET_COLORS.map((c) => (
                           <button
@@ -361,7 +363,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
         <div className="pt-2 border-t border-gray-200/80 dark:border-slate-800 space-y-2">
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">Từ Node</label>
+              <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">{t('builder.fromNode')}</label>
               <select
                 value={fromInstance}
                 onChange={(e) => setFromInstance(e.target.value)}
@@ -375,7 +377,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">Đến Node</label>
+              <label className="text-[10px] text-gray-500 dark:text-slate-400 block mb-0.5">{t('builder.toNode')}</label>
               <select
                 value={toInstance}
                 onChange={(e) => setToInstance(e.target.value)}
@@ -393,7 +395,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
           <div className="flex gap-1.5">
             <input
               type="text"
-              placeholder="Tên thông điệp luồng..."
+              placeholder={t('builder.messageShortPlaceholder')}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               className="flex-1 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-gray-800 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 rounded px-2 py-1 text-[11px] outline-none"
@@ -403,15 +405,15 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
               onChange={(e) => setFlowType(e.target.value as FlowType)}
               className="bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded px-1.5 py-1 text-[11px]"
             >
-              <option value="solid" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">Nét liền</option>
-              <option value="dashed" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">Nét đứt</option>
-              <option value="dotted" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">Nét chấm</option>
+              <option value="solid" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">{t('canvas.styleSolid')}</option>
+              <option value="dashed" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">{t('canvas.styleDashed')}</option>
+              <option value="dotted" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100">{t('canvas.styleDotted')}</option>
             </select>
           </div>
 
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-gray-500 dark:text-slate-400">Màu:</span>
+              <span className="text-[10px] text-gray-500 dark:text-slate-400">{t('builder.colorColon')}</span>
               <div className="flex gap-1">
                 {PRESET_COLORS.map((c) => (
                   <button
@@ -435,7 +437,7 @@ export const EdgeConfigurator: React.FC<EdgeConfiguratorProps> = ({
               icon={<Plus size={12} />}
               className="py-1 px-2.5 text-[11px]"
             >
-              Thêm luồng
+              {t('builder.addFlow')}
             </Button>
           </div>
         </div>

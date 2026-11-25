@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { LayoutSwimlane } from '../../services/LayoutEngine';
+import { useTranslation } from '../../i18n';
 
 interface SwimlaneRendererProps {
   swimlanes: LayoutSwimlane[];
@@ -15,6 +16,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
   onSelectDiagram,
 }) => {
   const resizeRef = useRef<{ startY: number; startH: number } | null>(null);
+  const { t } = useTranslation();
 
   const handleLaneResizeStart = (e: React.MouseEvent, lane: LayoutSwimlane) => {
     e.stopPropagation();
@@ -93,7 +95,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
                 fontSize={11}
                 fontWeight={700}
               >
-                + Chưa có làn bơi
+                {t('canvas.noSwimlaneTitle')}
               </text>
               <text
                 x={100}
@@ -102,7 +104,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
                 fill={isDark ? '#64748B' : '#94A3B8'}
                 fontSize={9}
               >
-                (Bấm để tạo làn mới)
+                {t('canvas.noSwimlaneSub')}
               </text>
 
               {/* Center Guidance text */}
@@ -113,7 +115,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
                 fontSize={12}
                 fontStyle="italic"
               >
-                Sơ đồ mới này chưa có làn bơi (swimlane). Bấm vào đây để chọn sơ đồ, sau đó thêm vai trò ở bảng bên trái để tạo làn bơi.
+                {t('canvas.noSwimlaneDesc')}
               </text>
             </g>
           );

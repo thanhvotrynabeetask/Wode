@@ -1,6 +1,7 @@
 import React from 'react';
 import { Point } from '../../services/EdgeRouter';
 import { BorderSide } from '../../types/schema';
+import { useTranslation } from '../../i18n';
 
 /** Segment index used for the single handle shown on a perfectly straight edge. */
 export const STRAIGHT_EDGE_HANDLE = -1;
@@ -21,13 +22,6 @@ interface EdgeRouteHandlesProps {
     segmentIndex: number
   ) => void;
 }
-
-const SIDE_LABELS: Record<BorderSide, string> = {
-  top: 'Trên',
-  right: 'Phải',
-  bottom: 'Dưới',
-  left: 'Trái',
-};
 
 function getNodeMidpoints(node: { x: number; y: number; width: number; height: number }): { side: BorderSide; x: number; y: number }[] {
   return [
@@ -54,7 +48,15 @@ export const EdgeRouteHandles: React.FC<EdgeRouteHandlesProps> = ({
   onSelectSide,
   onHandleMouseDown,
 }) => {
+  const { t } = useTranslation();
   if (points.length < 2) return null;
+
+  const sideLabels: Record<BorderSide, string> = {
+    top: t('canvas.sideTop'),
+    right: t('canvas.sideRight'),
+    bottom: t('canvas.sideBottom'),
+    left: t('canvas.sideLeft'),
+  };
 
   const startPoint = points[0];
   const endPoint = points[points.length - 1];
@@ -127,7 +129,7 @@ export const EdgeRouteHandles: React.FC<EdgeRouteHandlesProps> = ({
                     className="group-hover/anchor:scale-150 group-hover/anchor:fill-blue-100 transition-transform"
                   />
                 )}
-                <title>{`Cạnh ${SIDE_LABELS[pt.side]}: Nhấp để chuyển đầu nguồn vào giữa cạnh này`}</title>
+                <title>{t('canvas.edgeAnchorSource', { side: sideLabels[pt.side] })}</title>
               </g>
             );
           })}
@@ -179,7 +181,7 @@ export const EdgeRouteHandles: React.FC<EdgeRouteHandlesProps> = ({
                     className="group-hover/anchor:scale-150 group-hover/anchor:fill-red-100 transition-transform"
                   />
                 )}
-                <title>{`Cạnh ${SIDE_LABELS[pt.side]}: Nhấp để chuyển đầu đích vào giữa cạnh này`}</title>
+                <title>{t('canvas.edgeAnchorTarget', { side: sideLabels[pt.side] })}</title>
               </g>
             );
           })}
@@ -231,7 +233,7 @@ export const EdgeRouteHandles: React.FC<EdgeRouteHandlesProps> = ({
           className="group-hover:scale-110 transition-transform shadow-md"
         />
         <circle r={2} fill="#FFFFFF" />
-        <title>Điểm chạm nguồn: Kéo để đổi sang 1 trong 4 cạnh (ở giữa cạnh)</title>
+        <title>{t('canvas.edgeHandleSource')}</title>
       </g>
 
       {/* Target Endpoint Handle (Điểm chạm đầu đích trên viền Node B) */}
@@ -256,7 +258,7 @@ export const EdgeRouteHandles: React.FC<EdgeRouteHandlesProps> = ({
           className="group-hover:scale-110 transition-transform shadow-md"
         />
         <circle r={2} fill="#FFFFFF" />
-        <title>Điểm chạm đích: Kéo để đổi sang 1 trong 4 cạnh (ở giữa cạnh)</title>
+        <title>{t('canvas.edgeHandleTarget')}</title>
       </g>
     </g>
   );

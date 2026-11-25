@@ -8,6 +8,8 @@ import {
   NodeListingItem,
   NodeBorderAnchor,
   DiagramSection,
+  NodeInstance,
+  EdgeConfig,
 } from '../types/schema';
 import { CANVAS_DEFAULTS } from '../utils/constants';
 import { NODE_KIND_META } from '../utils/nodeKind';
@@ -171,7 +173,7 @@ function getDiagramList(schema: ProjectSchema): DiagramSection[] {
   return [
     {
       id: schema.active_diagram_id || 'diag_1',
-      title: schema.metadata?.project_name || 'Sơ đồ 1',
+      title: schema.metadata?.project_name || 'Diagram 1',
       order: 1,
       roles: schema.roles || [],
       node_palette: schema.node_palette || [],
@@ -352,13 +354,12 @@ export class LayoutEngine {
       }
 
       // 3. Position Frames and Nodes along X-axis
-      let currentX = startX;
+      let currentFrameX = startX;
       const nodePositionMap = new Map<string, LayoutNode>();
 
       // 3a. Position Standalone Nodes (Nodes not in any frame)
+      let maxStandaloneRightX = startX;
       if (diag.nodes && diag.nodes.length > 0) {
-        let maxNodeRightX = currentX;
-
         diag.nodes.forEach((nodeInst, nIdx) => {
           const tpl = templateMap.get(nodeInst.base_id);
           const nodeKind = resolveKind(nodeInst, tpl);
@@ -371,7 +372,7 @@ export class LayoutEngine {
           const nodeHeight = computeNodeHeight(nodeInst);
           const nodeWidth = computeNodeWidth(nodeInst);
 
-          const defaultX = currentX + nIdx * (nodeWidth + nodeGapX);
+          const defaultX = startX + nIdx * (nodeWidth + nodeGapX);
           const nodeX = nodeInst.custom_x !== undefined ? nodeInst.custom_x : defaultX;
 
           let nodeY = laneInfo.y + (laneInfo.height - nodeHeight) / 2;
@@ -407,23 +408,133 @@ export class LayoutEngine {
           layoutNodes.push(layoutNode);
           nodePositionMap.set(nodeInst.instance_id, layoutNode);
 
-          if (nodeX + nodeWidth > maxNodeRightX) {
-            maxNodeRightX = nodeX + nodeWidth;
+          if (nodeX + nodeWidth > maxStandaloneRightX) {
+            maxStandaloneRightX = nodeX + nodeWidth;
+          }
+        });
+      }
+
+      // If standalone nodes exist without custom_x, frame sequence starts after them
+      const hasUnpositionedStandalone = (diag.nodes || []).some((n) => n.custom_x === undefined);
+      if (hasUnpositionedStandalone && diag.nodes && diag.nodes.length > 0) {
+        currentFrameX = maxStandaloneRightX + frameGap;
+      }
+
+      let maxFrameRightX = currentFrameX;
+
+      const roleIndexMap = new Map<string, number>();
+      (diag.roles || []).forEach((r, idx) => {
+        roleIndexMap.set(r.id, idx);
+        roleIndexMap.set(r.name.toLowerCase(), idx);
+      });
+
+      const computeFrameAutoColumns = (
+        frameNodes: NodeInstance[],
+        frameEdges: EdgeConfig[]
+      ): Map<string, number> => {
+        const nodeMap = new Map<string, { roleId: string; laneIndex: number; column?: number }>();
+        frameNodes.forEach((n) => {
+          const tpl = templateMap.get(n.base_id);
+          const roleId = resolveRoleId(n, tpl);
+          nodeMap.set(n.instance_id, {
+            roleId,
+            laneIndex: roleIndexMap.get(roleId) ?? roleIndexMap.get(roleId.toLowerCase()) ?? 0,
+            column: n.column,
+          });
+        });
+
+        const inEdges = new Map<string, string[]>();
+        frameNodes.forEach((n) => inEdges.set(n.instance_id, []));
+
+        (frameEdges || []).forEach((e) => {
+          if (inEdges.has(e.to_instance) && nodeMap.has(e.from_instance)) {
+            if (e.flow_type !== 'dashed') {
+              inEdges.get(e.to_instance)!.push(e.from_instance);
+            }
           }
         });
 
-        currentX = maxNodeRightX + frameGap;
-      }
+        const columnMap = new Map<string, number>();
+        const columns: Map<string, string>[] = [];
+
+        function getCol(cIdx: number) {
+          while (columns.length <= cIdx) columns.push(new Map());
+          return columns[cIdx];
+        }
+
+        function isPathObstructed(colIdx: number, laneA: number, laneB: number): boolean {
+          const minLane = Math.min(laneA, laneB);
+          const maxLane = Math.max(laneA, laneB);
+          const colRoles = getCol(colIdx);
+          for (const instId of colRoles.values()) {
+            const node = nodeMap.get(instId);
+            if (node && node.laneIndex > minLane && node.laneIndex < maxLane) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        frameNodes.forEach((n) => {
+          if (n.column !== undefined) {
+            columnMap.set(n.instance_id, n.column);
+            const colMap = getCol(n.column);
+            const roleId = nodeMap.get(n.instance_id)?.roleId || '';
+            colMap.set(roleId, n.instance_id);
+            return;
+          }
+
+          const nInfo = nodeMap.get(n.instance_id)!;
+          const roleId = nInfo.roleId;
+          const myLane = nInfo.laneIndex;
+          const preds = inEdges.get(n.instance_id) || [];
+
+          let minCol = 0;
+          let preferredCol = -1;
+
+          preds.forEach((pId) => {
+            if (columnMap.has(pId)) {
+              const pCol = columnMap.get(pId)!;
+              const pNode = nodeMap.get(pId)!;
+              if (pNode.roleId === roleId) {
+                minCol = Math.max(minCol, pCol + 1);
+              } else {
+                minCol = Math.max(minCol, pCol);
+                if (!isPathObstructed(pCol, pNode.laneIndex, myLane)) {
+                  preferredCol = pCol;
+                } else {
+                  minCol = Math.max(minCol, pCol + 1);
+                }
+              }
+            }
+          });
+
+          let placedCol = -1;
+          if (preferredCol >= minCol && !getCol(preferredCol).has(roleId)) {
+            placedCol = preferredCol;
+          } else {
+            let c = minCol;
+            while (getCol(c).has(roleId)) c++;
+            placedCol = c;
+          }
+
+          columnMap.set(n.instance_id, placedCol);
+          getCol(placedCol).set(roleId, n.instance_id);
+        });
+
+        return columnMap;
+      };
 
       diag.frames.forEach((frame) => {
-        const frameStartX = currentX;
+        const frameStartX = frame.custom_x !== undefined ? frame.custom_x : currentFrameX;
         let frameContentWidth = 0;
 
         if (frame.nodes.length === 0) {
           frameContentWidth = defaultNodeWidth + 30;
-          currentX += frameContentWidth + frameGap;
+          currentFrameX = Math.max(currentFrameX, frameStartX + frameContentWidth + frameGap);
         } else {
           let maxNodeRightX = frameStartX;
+          const autoColMap = computeFrameAutoColumns(frame.nodes, frame.edges_config || []);
 
           frame.nodes.forEach((nodeInst, nIdx) => {
             const tpl = templateMap.get(nodeInst.base_id);
@@ -437,7 +548,8 @@ export class LayoutEngine {
             const nodeHeight = computeNodeHeight(nodeInst);
             const nodeWidth = computeNodeWidth(nodeInst);
 
-            const defaultX = currentX + nIdx * (nodeWidth + nodeGapX);
+            const col = nodeInst.column !== undefined ? nodeInst.column : (autoColMap.get(nodeInst.instance_id) ?? nIdx);
+            const defaultX = frameStartX + col * (nodeWidth + nodeGapX);
             const nodeX = nodeInst.custom_x !== undefined ? nodeInst.custom_x : defaultX;
 
             let nodeY = laneInfo.y + (laneInfo.height - nodeHeight) / 2;
@@ -478,13 +590,16 @@ export class LayoutEngine {
             }
           });
 
-          frameContentWidth = Math.max(
-            frame.nodes.length * defaultNodeWidth + Math.max(0, frame.nodes.length - 1) * nodeGapX,
+          const maxCol = Math.max(0, ...Array.from(autoColMap.values()));
+          const naturalWidth = Math.max(
+            (maxCol + 1) * defaultNodeWidth + maxCol * nodeGapX,
             maxNodeRightX - frameStartX
           );
-          currentX += frameContentWidth + frameGap;
+          frameContentWidth = frame.custom_width ? Math.max(100, frame.custom_width) : naturalWidth;
+          currentFrameX = Math.max(currentFrameX, frameStartX + frameContentWidth + frameGap);
         }
 
+        const calculatedFrameWidth = frame.custom_width ? Math.max(120, frame.custom_width) : frameContentWidth + 30;
         frameOverlays.push({
           diagramId: diag.id,
           frameId: frame.frame_id,
@@ -492,13 +607,18 @@ export class LayoutEngine {
           order: frame.order,
           x: frameStartX - 15,
           y: diagramSwimlanesStartY - 14,
-          width: frameContentWidth + 30,
+          width: calculatedFrameWidth,
           height: currentLaneY - diagramSwimlanesStartY + 24,
         });
+
+        if (frameStartX + calculatedFrameWidth > maxFrameRightX) {
+          maxFrameRightX = frameStartX + calculatedFrameWidth;
+        }
       });
 
-      if (currentX > maxContentWidthAcrossAll) {
-        maxContentWidthAcrossAll = currentX;
+      const diagramContentRightX = Math.max(maxStandaloneRightX, maxFrameRightX);
+      if (diagramContentRightX > maxContentWidthAcrossAll) {
+        maxContentWidthAcrossAll = diagramContentRightX;
       }
 
       // 4. Collect and Route Edges for this Diagram
@@ -631,7 +751,7 @@ export class LayoutEngine {
           height: n.height,
         })),
         requests,
-        { minX: laneHeaderWidth + 10, width: Math.max(1200, currentX + 120), height: currentLaneY + 40 }
+        { minX: laneHeaderWidth + 10, width: Math.max(1200, diagramContentRightX + 120), height: currentLaneY + 40 }
       );
 
       uniqueEdges.forEach((edgeSpec) => {

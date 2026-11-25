@@ -30,6 +30,8 @@ import {
 import { CANVAS_DEFAULTS } from '../../utils/constants';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+import { useTranslation } from '../../i18n';
 
 interface CanvasSubToolbarProps {
   totalNodes: number;
@@ -67,12 +69,15 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
     moveDiagram,
     updateDiagramTitle,
     setActiveDiagram,
+    clearCanvas,
   } = useProjectStore();
 
   const { keybindings } = useSettingsStore();
+  const { t } = useTranslation();
 
   const [showSpacingPopover, setShowSpacingPopover] = useState(false);
   const [showDiagramPopover, setShowDiagramPopover] = useState(false);
+  const [clearCanvasConfirmOpen, setClearCanvasConfirmOpen] = useState(false);
   const [editingDiagId, setEditingDiagId] = useState<string | null>(null);
   const [diagTitleInput, setDiagTitleInput] = useState('');
 
@@ -92,7 +97,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
       : [
           {
             id: schema.active_diagram_id || 'diag_1',
-            title: schema.metadata?.project_name || 'Sơ đồ 1',
+            title: schema.metadata?.project_name || 'Diagram 1',
             order: 1,
             frames: schema.frames || [],
           },
@@ -103,7 +108,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
   const openDuplicateModal = (diagId: string) => {
     const target = diagrams.find((d) => d.id === diagId) || activeDiagram;
     setDuplicateSourceId(target.id);
-    setDuplicateTitle(`${target.title} (Bản sao)`);
+    setDuplicateTitle(`${target.title} (${t('common.duplicate')})`);
     setDuplicateMode('full');
     setDuplicateModalOpen(true);
     setShowDiagramPopover(false);
@@ -118,9 +123,9 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
     });
     setDuplicateModalOpen(false);
     if (duplicateMode === 'full') {
-      addToast('success', `Đã nhân bản toàn bộ sơ đồ "${source?.title || ''}" thành sơ đồ mới bên dưới!`);
+      addToast('success', t('canvas.duplicateSuccessFull', { title: source?.title || '' }));
     } else {
-      addToast('success', `Đã nhân bản khung làn bơi của "${source?.title || ''}" thành sơ đồ mới bên dưới!`);
+      addToast('success', t('canvas.duplicateSuccessSwimlanes', { title: source?.title || '' }));
     }
   };
 
@@ -134,22 +139,22 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
           <button
             onClick={() => {
               undo();
-              addToast('info', 'Đã hoàn tác (Undo)');
+              addToast('info', t('canvas.undo'));
             }}
             disabled={!canUndo()}
             className="p-1 rounded text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-white dark:hover:bg-slate-700 transition-colors"
-            title={`Hoàn tác (${keybindings.undo})`}
+            title={`${t('canvas.undo')} (${keybindings.undo})`}
           >
             <Undo2 size={13} />
           </button>
           <button
             onClick={() => {
               redo();
-              addToast('info', 'Đã làm lại (Redo)');
+              addToast('info', t('canvas.redo'));
             }}
             disabled={!canRedo()}
             className="p-1 rounded text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-white dark:hover:bg-slate-700 transition-colors"
-            title={`Làm lại (${keybindings.redo})`}
+            title={`${t('canvas.redo')} (${keybindings.redo})`}
           >
             <Redo2 size={13} />
           </button>
@@ -166,10 +171,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
             }`}
-            title={`Chế độ Chọn và Kéo (${keybindings.modeSelect})`}
+            title={`${t('canvas.modeSelect')} (${keybindings.modeSelect})`}
           >
             <MousePointer size={13} />
-            <span>Chọn</span>
+            <span>{t('canvas.modeSelect').split(' ')[0]}</span>
             <kbd className="text-[10px] font-mono opacity-60 bg-gray-200 dark:bg-slate-600 px-1 py-0.2 rounded">
               {keybindings.modeSelect}
             </kbd>
@@ -182,10 +187,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
             }`}
-            title={`Chế độ Di chuyển Canvas (${keybindings.modePan})`}
+            title={`${t('canvas.modePan')} (${keybindings.modePan})`}
           >
             <Hand size={13} />
-            <span>Kéo bàn</span>
+            <span>{t('canvas.modePan').split(' ')[0]}</span>
             <kbd className="text-[10px] font-mono opacity-60 bg-gray-200 dark:bg-slate-600 px-1 py-0.2 rounded">
               {keybindings.modePan}
             </kbd>
@@ -197,11 +202,11 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         {/* Multi-selection info */}
         {selectedCount > 0 ? (
           <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-md">
-            <span className="font-semibold text-xs">Đã chọn: {selectedCount}</span>
+            <span className="font-semibold text-xs">{t('canvas.selectedCount', { count: selectedCount })}</span>
             <button
               onClick={clearSelection}
               className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 p-0.5 ml-1"
-              title="Bỏ chọn tất cả"
+              title={t('common.cancel')}
             >
               <XSquare size={13} />
             </button>
@@ -210,13 +215,13 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
           <button
             onClick={() => {
               selectAllInstances(allInstanceIds);
-              addToast('info', `Đã chọn tất cả ${allInstanceIds.length} nhiệm vụ`);
+              addToast('info', t('canvas.selectedCount', { count: allInstanceIds.length }));
             }}
             className="flex items-center gap-1 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
-            title={`Chọn tất cả các node (${keybindings.selectAll})`}
+            title={`${t('canvas.selectAll')} (${keybindings.selectAll})`}
           >
             <CheckSquare size={13} />
-            <span>Chọn tất cả</span>
+            <span>{t('canvas.selectAll')}</span>
           </button>
         )}
       </div>
@@ -235,10 +240,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                 ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                 : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
-            title="Quản lý và sắp xếp các sơ đồ trong dự án (xếp tầng trên dưới)"
+            title={t('canvas.manageDiagrams')}
           >
             <Layers size={13} className="text-blue-600 dark:text-blue-400" />
-            <span className="font-semibold max-w-[130px] truncate">{activeDiagram?.title || 'Sơ đồ 1'}</span>
+            <span className="font-semibold max-w-[130px] truncate">{activeDiagram?.title || 'Diagram 1'}</span>
             <span className="text-[10px] font-mono text-gray-400">
               (#{activeDiagram?.order || 1}/{diagrams.length})
             </span>
@@ -252,10 +257,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                   <div>
                     <h4 className="font-bold text-gray-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
                       <Layers size={13} className="text-blue-600" />
-                      Quản lý Sơ đồ ({diagrams.length})
+                      {t('canvas.manageDiagrams')} ({diagrams.length})
                     </h4>
                     <p className="text-[10px] text-gray-400 mt-0.5">
-                      Sơ đồ xếp theo thứ tự từ trên xuống dưới trên Canvas
+                      {t('canvas.diagramsOrderDesc')}
                     </p>
                   </div>
                   <button
@@ -264,34 +269,34 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                       window.dispatchEvent(new CustomEvent('wode:open-file', { detail: { mode: 'append' } }));
                     }}
                     className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-md text-[11px] font-medium transition-colors shadow-xs"
-                    title="Mở file sơ đồ bổ sung từ máy tính để ghép vào canvas này"
+                    title={t('canvas.appendFile')}
                   >
                     <FolderOpen size={11} />
-                    <span>Ghép file</span>
+                    <span>{t('canvas.appendFile')}</span>
                   </button>
                 </div>
 
-                {/* 2 Tính năng riêng biệt: Tạo mới hoàn toàn vs Nhân bản */}
+                {/* 2 Buttons: New Blank vs Duplicate */}
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       addDiagram();
-                      addToast('success', 'Đã thêm sơ đồ mới hoàn toàn bên dưới!');
+                      addToast('success', t('canvas.createdNewBlankDiagram'));
                     }}
                     className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs"
-                    title="Tạo sơ đồ mới hoàn toàn ở dưới (trống rỗng, không sao chép swimlane cũ)"
+                    title={t('canvas.newBlankDiagram')}
                   >
                     <Plus size={13} />
-                    <span>+ Tạo mới hoàn toàn</span>
+                    <span>+ {t('canvas.newBlankDiagram')}</span>
                   </button>
 
                   <button
                     onClick={() => openDuplicateModal(activeId)}
                     className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs"
-                    title="Nhân bản sơ đồ hiện tại sang sơ đồ mới ở dưới (tùy chọn sao chép làn bơi hoặc cả nội dung)"
+                    title={t('canvas.duplicateDiagram')}
                   >
                     <Copy size={13} />
-                    <span>Nhân bản sơ đồ</span>
+                    <span>{t('canvas.duplicateDiagram')}</span>
                   </button>
                 </div>
               </div>
@@ -335,7 +340,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                                 value={diagTitleInput}
                                 onChange={(e) => setDiagTitleInput(e.target.value)}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
+                                   if (e.key === 'Enter') {
                                     updateDiagramTitle(diag.id, diagTitleInput);
                                     setEditingDiagId(null);
                                   }
@@ -370,12 +375,12 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                                 </span>
                                 {isActive && (
                                   <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/60 px-1 py-0.2 rounded shrink-0">
-                                    Đang sửa
+                                    {t('canvas.activeEditing')}
                                   </span>
                                 )}
                               </div>
                               <p className="text-[10px] text-gray-500 dark:text-slate-400">
-                                {diag.frames.length} phân đoạn • {totalNodes} nhiệm vụ
+                                {t('canvas.diagramSummary', { frameCount: diag.frames.length, nodeCount: totalNodes })}
                               </p>
                             </div>
                           )}
@@ -391,10 +396,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                               disabled={idx === 0}
                               onClick={() => {
                                 moveDiagram(diag.id, 'up');
-                                addToast('info', `Đã chuyển "${diag.title}" lên trên`);
+                                addToast('info', t('canvas.diagramMovedUp', { title: diag.title }));
                               }}
                               className="p-1 text-gray-400 hover:text-blue-600 hover:bg-gray-200 dark:hover:bg-slate-700 rounded disabled:opacity-20 transition-colors"
-                              title="Chuyển sơ đồ lên trên"
+                              title={t('canvas.moveDiagramUp')}
                             >
                               <ChevronUp size={13} />
                             </button>
@@ -402,17 +407,17 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                               disabled={idx === diagrams.length - 1}
                               onClick={() => {
                                 moveDiagram(diag.id, 'down');
-                                addToast('info', `Đã chuyển "${diag.title}" xuống dưới`);
+                                addToast('info', t('canvas.diagramMovedDown', { title: diag.title }));
                               }}
                               className="p-1 text-gray-400 hover:text-blue-600 hover:bg-gray-200 dark:hover:bg-slate-700 rounded disabled:opacity-20 transition-colors"
-                              title="Chuyển sơ đồ xuống dưới"
+                              title={t('canvas.moveDiagramDown')}
                             >
                               <ChevronDown size={13} />
                             </button>
                             <button
                               onClick={() => openDuplicateModal(diag.id)}
                               className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded transition-colors"
-                              title="Nhân bản sơ đồ này"
+                              title={t('canvas.duplicateThisDiagram')}
                             >
                               <Copy size={13} />
                             </button>
@@ -422,24 +427,29 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                                 setDiagTitleInput(diag.title);
                               }}
                               className="p-1 text-gray-400 hover:text-blue-600 hover:bg-gray-200 dark:hover:bg-slate-700 rounded transition-colors"
-                              title="Đổi tên sơ đồ"
+                              title={t('canvas.renameDiagram')}
                             >
                               <Edit3 size={13} />
                             </button>
-                            {diagrams.length > 1 && (
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Bạn có chắc muốn xóa "${diag.title}"?`)) {
+                            <button
+                              onClick={() => {
+                                if (diagrams.length > 1) {
+                                  if (confirm(t('canvas.deleteDiagramConfirm', { title: diag.title }))) {
                                     removeDiagram(diag.id);
-                                    addToast('info', `Đã xóa "${diag.title}"`);
+                                    addToast('info', t('canvas.diagramDeleted', { title: diag.title }));
                                   }
-                                }}
-                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
-                                title="Xóa sơ đồ này"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            )}
+                                } else {
+                                  if (confirm(t('canvas.resetSingleDiagramConfirm', { title: diag.title }))) {
+                                    clearCanvas();
+                                    addToast('info', t('canvas.singleDiagramResetToast', { title: diag.title }));
+                                  }
+                                }
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
+                              title={diagrams.length > 1 ? t('canvas.deleteDiagram') : t('canvas.clearCanvasBtn')}
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         )}
                       </div>
@@ -449,12 +459,24 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center text-[11px]">
-                <span className="text-gray-400">Click sơ đồ để chọn chỉnh sửa</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDiagramPopover(false);
+                    setClearCanvasConfirmOpen(true);
+                  }}
+                  className="flex items-center gap-1 text-red-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-1.5 py-0.5 rounded transition-colors"
+                  title={t('canvas.clearCanvasBtn')}
+                >
+                  <Trash2 size={11} />
+                  <span>{t('canvas.clearCanvasBtn')}</span>
+                </button>
+
                 <button
                   onClick={() => setShowDiagramPopover(false)}
                   className="text-gray-500 hover:text-gray-800 dark:hover:text-slate-300 font-medium"
                 >
-                  Đóng
+                  {t('common.close')}
                 </button>
               </div>
             </div>
@@ -473,10 +495,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                 ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                 : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
-            title="Chỉnh khoảng cách ngang giữa các node"
+            title={t('canvas.spacingLabel')}
           >
             <MoveHorizontal size={13} className="text-gray-500 dark:text-slate-400" />
-            <span>Khoảng cách: {currentSpacing}px</span>
+            <span>{t('canvas.spacingLabel')}: {currentSpacing}px</span>
           </button>
 
           {showSpacingPopover && (
@@ -484,7 +506,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-1">
                   <Sliders size={12} className="text-blue-600 dark:text-blue-400" />
-                  Khoảng cách ngang
+                  {t('canvas.spacingLabel')}
                 </span>
                 <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs">
                   {currentSpacing}px
@@ -510,7 +532,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                       : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
                 >
-                  Gọn (24px)
+                  {t('canvas.spacingCompact')}
                 </button>
                 <button
                   onClick={() => setHorizontalSpacing(40)}
@@ -520,7 +542,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                       : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
                 >
-                  Chuẩn (40px)
+                  {t('canvas.spacingStandard')}
                 </button>
                 <button
                   onClick={() => setHorizontalSpacing(72)}
@@ -530,7 +552,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                       : 'hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
                 >
-                  Rộng (72px)
+                  {t('canvas.spacingWide')}
                 </button>
               </div>
 
@@ -539,7 +561,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
                   onClick={() => setShowSpacingPopover(false)}
                   className="text-[11px] text-gray-500 hover:text-gray-800 dark:hover:text-slate-300"
                 >
-                  Xong
+                  {t('common.close')}
                 </button>
               </div>
             </div>
@@ -549,13 +571,13 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         <button
           onClick={() => {
             resetNodePositions();
-            addToast('info', 'Đã căn đều lại vị trí các node theo làn bơi.');
+            addToast('info', t('canvas.autoAlign'));
           }}
           className="flex items-center gap-1 px-2 py-1 rounded-md text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-          title="Tự động căn đều lại tọa độ ngang của tất cả các node"
+          title={t('canvas.autoAlign')}
         >
           <Sparkles size={13} className="text-amber-500" />
-          <span>Căn đều vị trí</span>
+          <span>{t('canvas.autoAlign')}</span>
         </button>
       </div>
 
@@ -564,7 +586,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         <button
           onClick={() => setZoom(Math.max(CANVAS_DEFAULTS.ZOOM_MIN, Number((zoom - CANVAS_DEFAULTS.ZOOM_STEP).toFixed(2))))}
           className="p-1.5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
-          title={`Thu nhỏ (${keybindings.zoomOut})`}
+          title={`${t('canvas.zoomOut')} (${keybindings.zoomOut})`}
         >
           <ZoomOut size={14} />
         </button>
@@ -572,7 +594,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         <span
           onClick={resetView}
           className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer w-11 text-center"
-          title="Click để reset 100%"
+          title="Reset 100%"
         >
           {Math.round(zoom * 100)}%
         </span>
@@ -580,7 +602,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         <button
           onClick={() => setZoom(Math.min(CANVAS_DEFAULTS.ZOOM_MAX, Number((zoom + CANVAS_DEFAULTS.ZOOM_STEP).toFixed(2))))}
           className="p-1.5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
-          title={`Phóng to (${keybindings.zoomIn})`}
+          title={`${t('canvas.zoomIn')} (${keybindings.zoomIn})`}
         >
           <ZoomIn size={14} />
         </button>
@@ -590,7 +612,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         <button
           onClick={onFitToScreen}
           className="p-1.5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
-          title={`Vừa màn hình (${keybindings.fitScreen})`}
+          title={`${t('canvas.fitScreen')} (${keybindings.fitScreen})`}
         >
           <Maximize2 size={14} />
         </button>
@@ -598,7 +620,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         <button
           onClick={resetView}
           className="p-1.5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
-          title="Căn giữa lại (Reset view)"
+          title={t('common.reset')}
         >
           <RotateCcw size={14} />
         </button>
@@ -609,26 +631,26 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
     <Modal
       isOpen={duplicateModalOpen}
       onClose={() => setDuplicateModalOpen(false)}
-      title="Nhân bản Sơ đồ"
+      title={t('canvas.duplicateDiagram')}
       size="md"
     >
       <div className="space-y-4">
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
-            Sơ đồ gốc cần nhân bản
+            {t('canvas.sourceDiagram')}
           </label>
           <select
             value={duplicateSourceId}
             onChange={(e) => {
               setDuplicateSourceId(e.target.value);
               const chosen = diagrams.find((d) => d.id === e.target.value);
-              if (chosen) setDuplicateTitle(`${chosen.title} (Bản sao)`);
+              if (chosen) setDuplicateTitle(`${chosen.title} (${t('common.duplicate')})`);
             }}
             className="w-full text-xs border border-gray-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 outline-none focus:border-indigo-500"
           >
             {diagrams.map((d) => (
               <option key={d.id} value={d.id}>
-                #{d.order} - {d.title} ({d.frames.reduce((sum, f) => sum + f.nodes.length, 0)} nhiệm vụ)
+                #{d.order} - {d.title} ({d.frames.reduce((sum, f) => sum + f.nodes.length, 0)} {t('builder.nodeCount', { count: '' }).replace(/[()]/g, '').trim()})
               </option>
             ))}
           </select>
@@ -636,20 +658,20 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
 
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
-            Tên sơ đồ mới
+            {t('canvas.diagramTitle')}
           </label>
           <input
             type="text"
             value={duplicateTitle}
             onChange={(e) => setDuplicateTitle(e.target.value)}
-            placeholder="Nhập tên sơ đồ..."
+            placeholder={t('canvas.diagramTitle')}
             className="w-full text-xs border border-gray-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 outline-none focus:border-indigo-500"
           />
         </div>
 
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">
-            Chế độ nhân bản
+            {t('canvas.duplicateMode')}
           </label>
           <div className="space-y-2">
             <label
@@ -669,10 +691,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
               />
               <div>
                 <div className="text-xs font-bold text-gray-800 dark:text-slate-100">
-                  Nhân bản toàn bộ sơ đồ (Khuyên dùng)
+                  {t('canvas.duplicateFull')}
                 </div>
                 <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                  Sao chép toàn bộ: Giữ nguyên các làn bơi (swimlane), bảng mẫu nhiệm vụ và tất cả phân đoạn, nhiệm vụ đã vẽ sang sơ đồ mới độc lập bên dưới.
+                  {t('canvas.duplicateFullDesc')}
                 </p>
               </div>
             </label>
@@ -694,10 +716,10 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
               />
               <div>
                 <div className="text-xs font-bold text-gray-800 dark:text-slate-100">
-                  Chỉ nhân bản khung làn bơi (Swimlane)
+                  {t('canvas.duplicateSwimlanesOnly')}
                 </div>
                 <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                  Sao chép các làn bơi & mẫu nhiệm vụ, giữ phân đoạn trống để bạn vẽ quy trình mới mà không cần tạo lại vai trò/swimlane.
+                  {t('canvas.duplicateSwimlanesOnlyDesc')}
                 </p>
               </div>
             </label>
@@ -706,7 +728,7 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
           <Button variant="ghost" size="sm" onClick={() => setDuplicateModalOpen(false)}>
-            Hủy
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -714,11 +736,28 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
             icon={<Copy size={13} />}
             onClick={handleConfirmDuplicate}
           >
-            Nhân bản ngay
+            {t('canvas.duplicateNow')}
           </Button>
         </div>
       </div>
     </Modal>
+
+    {/* Clear Entire Canvas Confirmation Dialog */}
+    {clearCanvasConfirmOpen && (
+      <ConfirmDialog
+        isOpen={true}
+        title={t('canvas.clearCanvasTitle')}
+        message={t('canvas.clearCanvasMsg')}
+        confirmLabel={t('canvas.clearCanvasConfirm')}
+        variant="danger"
+        onConfirm={() => {
+          clearCanvas();
+          setClearCanvasConfirmOpen(false);
+          addToast('info', t('canvas.canvasClearedToast'));
+        }}
+        onCancel={() => setClearCanvasConfirmOpen(false)}
+      />
+    )}
   </>
 );
 };

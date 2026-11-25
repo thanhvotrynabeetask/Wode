@@ -106,10 +106,17 @@ export class DiagramEngine {
 
     const totalHeight = Math.max(currentY, 400);
 
-    // Position frames and nodes horizontally
+    // Position frames and nodes horizontally with intelligent auto-column alignment
     let currentX = CANVAS_DEFAULTS.START_X;
     const layoutNodes: LayoutNode[] = [];
     const layoutFrames: LayoutFrame[] = [];
+
+    // Role index lookup to detect lane order and intermediate obstructions
+    const roleIndexMap = new Map<string, number>();
+    roles.forEach((r, idx) => {
+      roleIndexMap.set(r.id, idx);
+      roleIndexMap.set(r.name.toLowerCase(), idx);
+    });
 
     frames.forEach((frame) => {
       const frameStartX = currentX;
@@ -120,13 +127,19 @@ export class DiagramEngine {
         frameWidth = 140;
         currentX += frameWidth + spacing;
       } else {
-        frameNodes.forEach((node, nodeIdx) => {
+        // Calculate auto-columns for nodes in this frame:
+        // Consecutive nodes in DIFFERENT lanes align vertically in the same column unless obstructed
+        const autoColMap = this.computeAutoColumns(frameNodes, frame.edges_config || [], roles, roleIndexMap, schema);
+
+        frameNodes.forEach((node) => {
           const roleId = node.assigned_role_id || this.getRoleForNode(node, schema);
           const lane = swimlanes.find((l) => l.roleId === roleId) || swimlanes[0];
           const nodeWidth = node.custom_width || CANVAS_DEFAULTS.NODE_WIDTH;
           const nodeHeight = node.custom_height || (node.custom_label ? 74 : CANVAS_DEFAULTS.NODE_MIN_HEIGHT);
 
-          const nodeX = node.custom_x !== undefined ? node.custom_x : currentX;
+          const col = node.column !== undefined ? node.column : (autoColMap.get(node.instance_id) ?? 0);
+          const defaultX = frameStartX + col * (nodeWidth + spacing);
+          const nodeX = node.custom_x !== undefined ? node.custom_x : defaultX;
           const laneY = lane ? lane.y : 0;
           const laneH = lane ? lane.height : CANVAS_DEFAULTS.SWIMLANE_MIN_HEIGHT;
           const nodeY = node.custom_y !== undefined ? node.custom_y : laneY + (laneH - nodeHeight) / 2;
@@ -149,10 +162,6 @@ export class DiagramEngine {
             width: nodeWidth,
             height: nodeHeight,
           });
-
-          if (node.custom_x === undefined) {
-            currentX += nodeWidth + spacing;
-          }
         });
 
         const frameNodeLayouts = layoutNodes.filter((n) => n.frameId === frame.frame_id);
@@ -160,6 +169,7 @@ export class DiagramEngine {
           const minX = Math.min(...frameNodeLayouts.map((n) => n.x));
           const maxX = Math.max(...frameNodeLayouts.map((n) => n.x + n.width));
           frameWidth = Math.max(140, maxX - minX + CANVAS_DEFAULTS.FRAME_PADDING_HORIZONTAL * 2);
+          currentX = maxX + CANVAS_DEFAULTS.FRAME_PADDING_HORIZONTAL;
         }
       }
 
@@ -179,10 +189,18 @@ export class DiagramEngine {
     const totalWidth = Math.max(currentX + 100, 1200);
     swimlanes.forEach((lane) => (lane.width = totalWidth));
 
-    // Build edges
+    // Build edges with smart vertical alignment and non-overlapping loopbacks
     const layoutEdges: LayoutEdge[] = [];
     const nodeMap = new Map<string, LayoutNode>();
     layoutNodes.forEach((n) => nodeMap.set(n.instanceId, n));
+
+    // Index all forward edges to identify bidirectional return pairs
+    const allEdgePairs = new Set<string>();
+    frames.forEach((frame) => {
+      (frame.edges_config || []).forEach((edge) => {
+        allEdgePairs.add(`${edge.from_instance}>${edge.to_instance}`);
+      });
+    });
 
     frames.forEach((frame) => {
       (frame.edges_config || []).forEach((edge) => {
@@ -191,42 +209,62 @@ export class DiagramEngine {
         if (!fromNode || !toNode) return;
 
         const isMacro = fromNode.frameId !== toNode.frameId;
-
         const fromCenterX = fromNode.x + fromNode.width / 2;
         const toCenterX = toNode.x + toNode.width / 2;
         const isVerticallyAligned = Math.abs(fromCenterX - toCenterX) <= 24;
+
+        // Check if this edge is a return in a bidirectional pair (e.g. A->B forward, B->A return)
+        const isBidirectionalReturn = allEdgePairs.has(`${edge.to_instance}>${edge.from_instance}`) &&
+          (fromNode.x > toNode.x || (fromNode.x === toNode.x && edge.flow_type === 'dashed'));
 
         let pathD: string;
         let labelX: number;
         let labelY: number;
 
         if (isVerticallyAligned && toNode.y > fromNode.y) {
+          // Direct straight vertical flow: top to bottom
           const alignX = Math.round((fromCenterX + toCenterX) / 2);
           const startY = fromNode.y + fromNode.height;
           const endY = toNode.y;
           pathD = `M ${alignX} ${startY} L ${alignX} ${endY}`;
           labelX = alignX;
-          labelY = (startY + endY) / 2;
+          labelY = Math.round((startY + endY) / 2);
         } else if (isVerticallyAligned && toNode.y < fromNode.y) {
+          // Direct straight vertical flow: bottom to top
           const alignX = Math.round((fromCenterX + toCenterX) / 2);
           const startY = fromNode.y;
           const endY = toNode.y + toNode.height;
           pathD = `M ${alignX} ${startY} L ${alignX} ${endY}`;
           labelX = alignX;
-          labelY = (startY + endY) / 2;
+          labelY = Math.round((startY + endY) / 2);
+        } else if (isBidirectionalReturn || (toNode.x < fromNode.x && edge.flow_type === 'dashed')) {
+          // Backward / loopback flow (e.g. reject, sửa code):
+          // Arch upward above the lane so it never overlaps the forward line or labels
+          const sourcePoint = { x: fromNode.x + fromNode.width / 2, y: fromNode.y };
+          const targetPoint = { x: toNode.x + toNode.width / 2, y: toNode.y };
+          const archHeight = Math.max(35, Math.abs(targetPoint.x - sourcePoint.x) * 0.15);
+          const cp1x = sourcePoint.x - 20;
+          const cp1y = sourcePoint.y - archHeight;
+          const cp2x = targetPoint.x + 20;
+          const cp2y = targetPoint.y - archHeight;
+
+          pathD = `M ${sourcePoint.x} ${sourcePoint.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetPoint.x} ${targetPoint.y}`;
+          labelX = Math.round((sourcePoint.x + targetPoint.x) / 2);
+          labelY = Math.round((cp1y + cp2y) / 2 - 8);
         } else {
+          // Standard forward flow
           const sourcePoint = { x: fromNode.x + fromNode.width, y: fromNode.y + fromNode.height / 2 };
           const targetPoint = { x: toNode.x, y: toNode.y + toNode.height / 2 };
 
           const dx = targetPoint.x - sourcePoint.x;
-          const cp1x = sourcePoint.x + Math.max(40, dx * 0.4);
+          const cp1x = sourcePoint.x + Math.max(30, dx * 0.4);
           const cp1y = sourcePoint.y;
-          const cp2x = targetPoint.x - Math.max(40, dx * 0.4);
+          const cp2x = targetPoint.x - Math.max(30, dx * 0.4);
           const cp2y = targetPoint.y;
 
           pathD = `M ${sourcePoint.x} ${sourcePoint.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetPoint.x} ${targetPoint.y}`;
-          labelX = (sourcePoint.x + targetPoint.x) / 2;
-          labelY = (sourcePoint.y + targetPoint.y) / 2;
+          labelX = Math.round((sourcePoint.x + targetPoint.x) / 2);
+          labelY = Math.round((sourcePoint.y + targetPoint.y) / 2);
         }
 
         layoutEdges.push({
@@ -245,6 +283,21 @@ export class DiagramEngine {
       });
     });
 
+    // Label anti-collision pass: separate overlapping edge labels
+    for (let i = 0; i < layoutEdges.length; i++) {
+      for (let j = i + 1; j < layoutEdges.length; j++) {
+        const e1 = layoutEdges[i];
+        const e2 = layoutEdges[j];
+        if (e1.label && e2.label) {
+          const dx = Math.abs(e1.labelX - e2.labelX);
+          const dy = Math.abs(e1.labelY - e2.labelY);
+          if (dx < 50 && dy < 25) {
+            e2.labelY += 24;
+          }
+        }
+      }
+    }
+
     return {
       width: totalWidth,
       height: totalHeight,
@@ -253,6 +306,110 @@ export class DiagramEngine {
       nodes: layoutNodes,
       edges: layoutEdges,
     };
+  }
+
+  /**
+   * Computes optimal column positions (0, 1, 2...) for nodes in a frame:
+   * - Sequential nodes in DIFFERENT lanes align vertically in the same column unless an intermediate lane is blocked.
+   * - Consecutive nodes in the SAME lane advance to the next column.
+   */
+  private static computeAutoColumns(
+    frameNodes: NodeInstance[],
+    frameEdges: EdgeConfig[],
+    roles: Role[],
+    roleIndexMap: Map<string, number>,
+    schema: ProjectSchema
+  ): Map<string, number> {
+    const nodeMap = new Map<string, { roleId: string; laneIndex: number; column?: number }>();
+    frameNodes.forEach((n) => {
+      const roleId = n.assigned_role_id || this.getRoleForNode(n, schema);
+      nodeMap.set(n.instance_id, {
+        roleId,
+        laneIndex: roleIndexMap.get(roleId) ?? roleIndexMap.get(roleId.toLowerCase()) ?? 0,
+        column: n.column,
+      });
+    });
+
+    const inEdges = new Map<string, string[]>();
+    frameNodes.forEach((n) => inEdges.set(n.instance_id, []));
+
+    (frameEdges || []).forEach((e) => {
+      if (inEdges.has(e.to_instance) && nodeMap.has(e.from_instance)) {
+        if (e.flow_type !== 'dashed') {
+          inEdges.get(e.to_instance)!.push(e.from_instance);
+        }
+      }
+    });
+
+    const columnMap = new Map<string, number>();
+    const columns: Map<string, string>[] = [];
+
+    function getCol(cIdx: number) {
+      while (columns.length <= cIdx) columns.push(new Map());
+      return columns[cIdx];
+    }
+
+    function isPathObstructed(colIdx: number, laneA: number, laneB: number): boolean {
+      const minLane = Math.min(laneA, laneB);
+      const maxLane = Math.max(laneA, laneB);
+      const colRoles = getCol(colIdx);
+      for (const instId of colRoles.values()) {
+        const node = nodeMap.get(instId);
+        if (node && node.laneIndex > minLane && node.laneIndex < maxLane) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    frameNodes.forEach((n) => {
+      if (n.column !== undefined) {
+        columnMap.set(n.instance_id, n.column);
+        const colMap = getCol(n.column);
+        const roleId = nodeMap.get(n.instance_id)?.roleId || '';
+        colMap.set(roleId, n.instance_id);
+        return;
+      }
+
+      const nInfo = nodeMap.get(n.instance_id)!;
+      const roleId = nInfo.roleId;
+      const myLane = nInfo.laneIndex;
+      const preds = inEdges.get(n.instance_id) || [];
+
+      let minCol = 0;
+      let preferredCol = -1;
+
+      preds.forEach((pId) => {
+        if (columnMap.has(pId)) {
+          const pCol = columnMap.get(pId)!;
+          const pNode = nodeMap.get(pId)!;
+          if (pNode.roleId === roleId) {
+            minCol = Math.max(minCol, pCol + 1);
+          } else {
+            minCol = Math.max(minCol, pCol);
+            if (!isPathObstructed(pCol, pNode.laneIndex, myLane)) {
+              preferredCol = pCol;
+            } else {
+              minCol = Math.max(minCol, pCol + 1);
+            }
+          }
+        }
+      });
+
+      let placedCol = -1;
+      if (preferredCol >= minCol && !getCol(preferredCol).has(roleId)) {
+        placedCol = preferredCol;
+      } else {
+        let c = minCol;
+        while (getCol(c).has(roleId)) c++;
+        placedCol = c;
+      }
+
+      columnMap.set(n.instance_id, placedCol);
+      getCol(placedCol).set(roleId, n.instance_id);
+    });
+
+    return columnMap;
   }
 
   private static getRoleForNode(node: NodeInstance, schema: ProjectSchema): string {
@@ -363,11 +520,14 @@ export class DiagramEngine {
         const marker = e.isMacro ? 'url(#arrow-macro)' : 'url(#arrow-normal)';
 
         const labelMarkup = e.label
-          ? `
+          ? (() => {
+              const labelWidth = Math.max(48, Math.round(e.label.length * 7.5 + 24));
+              return `
           <g transform="translate(${e.labelX}, ${e.labelY})">
-            <rect x="${-e.label.length * 4 - 10}" y="-11" width="${e.label.length * 8 + 20}" height="22" rx="11" fill="${palette.edgeLabelBg}" stroke="${strokeColor}" stroke-width="1.5" />
+            <rect x="${-labelWidth / 2}" y="-11" width="${labelWidth}" height="22" rx="11" fill="${palette.edgeLabelBg}" stroke="${strokeColor}" stroke-width="1.5" />
             <text x="0" y="4" text-anchor="middle" font-size="11" font-weight="600" fill="${palette.edgeLabelText}" font-family="system-ui, sans-serif">${this.escapeXml(e.label)}</text>
-          </g>`
+          </g>`;
+            })()
           : '';
 
         return `
