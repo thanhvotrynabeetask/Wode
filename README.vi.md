@@ -64,7 +64,7 @@ Dù bạn chọn sử dụng qua **link web triển khai trên Vercel** hay **ch
 
 ### Lựa Chọn 1: Sử Dụng Ngay Trên Web (Deploy Link)
 Nếu bạn cần xem nhanh hoặc thiết kế sơ đồ tức thì mà không muốn cài đặt môi trường lập trình:
-* Truy cập link demo/deploy: `https://<your-wode-deployment>.vercel.app` *(hoặc link tác giả cung cấp)*.
+* Truy cập link demo/deploy: `wode-beta.vercel.app` *(hoặc link tác giả cung cấp)*.
 * Bạn vẫn có toàn bộ tính năng vẽ sơ đồ, xuất/nhập file `.json` và file `.html` offline.
 * Có thể đổi ngôn ngữ giao diện (English / Tiếng Việt) trong phần **Cài đặt** hoặc nút chuyển nhanh ở thanh Header.
 
