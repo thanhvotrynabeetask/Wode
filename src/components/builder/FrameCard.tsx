@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Frame, NodeTemplate, Role, NodeListingItem } from '../../types/schema';
 import { FrameNodeSlot } from './FrameNodeSlot';
-import { EdgeConfigurator } from './EdgeConfigurator';
+import { useUIStore } from '../../store/useUIStore';
 import {
   ChevronDown,
   ChevronRight,
@@ -33,7 +33,7 @@ interface FrameCardProps {
   onReorderNodes: (instanceIds: string[]) => void;
   onUpdateNodeLabel: (instanceId: string, label: string | null) => void;
   onUpdateNodeListings: (instanceId: string, listings: NodeListingItem[]) => void;
-  onUpdateEdges: (edges: any[]) => void;
+  onUpdateEdges?: (edges: any[]) => void;
   onUpdateNextFrameTarget: (targetId: string | null) => void;
 }
 
@@ -55,14 +55,13 @@ export const FrameCard: React.FC<FrameCardProps> = ({
   onReorderNodes,
   onUpdateNodeLabel,
   onUpdateNodeListings,
-  onUpdateEdges,
   onUpdateNextFrameTarget,
 }) => {
   const { t } = useTranslation();
+  const setActivePanel = useUIStore((s) => s.setActivePanel);
   const [collapsed, setCollapsed] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(frame.title);
-  const [showEdgeConfig, setShowEdgeConfig] = useState(false);
 
   const handleSaveTitle = () => {
     if (titleText.trim()) onUpdateTitle(titleText.trim());
@@ -233,36 +232,19 @@ export const FrameCard: React.FC<FrameCardProps> = ({
             </div>
           )}
 
-          {/* Micro-flow Edge Configurator Toggle */}
-          {frame.nodes.length >= 2 && (
-            <div className="pt-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowEdgeConfig(!showEdgeConfig);
-                }}
-                className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline"
-              >
-                <Network size={12} />
-                {showEdgeConfig ? t('builder.hideEdgeConfig') : t('builder.showEdgeConfig')}
-                {frame.edges_config.length > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.2 rounded-full ml-1">
-                    {frame.edges_config.length}
-                  </span>
-                )}
-              </button>
-
-              {showEdgeConfig && (
-                <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-                  <EdgeConfigurator
-                    nodes={frame.nodes}
-                    edges={frame.edges_config}
-                    onChange={onUpdateEdges}
-                  />
-                </div>
-              )}
-            </div>
-          )}
+          {/* Separated Connections Link */}
+          <div className="pt-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setActivePanel('connections');
+              }}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              <Network size={12} />
+              <span>Quản lý & sửa đường nối (Tab riêng)</span>
+            </button>
+          </div>
 
           {/* Macro-flow Branching Target */}
           {otherFrames.length > 0 && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, List, ChevronRight } from 'lucide-react';
+import { Layers, List, Network, ChevronRight } from 'lucide-react';
 import { useUIStore } from '../../store/useUIStore';
 import { ActivePanel } from '../../types/state';
 import { useTranslation } from '../../i18n';
@@ -15,6 +15,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ children }) => {
   const tabs: { id: ActivePanel; label: string; icon: React.ReactNode }[] = [
     { id: 'palette', label: t('sidebar.paletteTab'), icon: <Layers size={16} /> },
     { id: 'builder', label: t('sidebar.builderTab'), icon: <List size={16} /> },
+    { id: 'connections', label: t('sidebar.connectionsTab') || 'Đường nối', icon: <Network size={16} /> },
   ];
 
   if (!isSidebarExpanded) {

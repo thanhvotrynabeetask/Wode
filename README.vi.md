@@ -209,21 +209,47 @@ Mở cài đặt **Cursor Settings** > **Features** > **MCP Servers** (hoặc t�
 
 ---
 
-### 🧹 4. Tùy Chọn Xóa Toàn Diện & Quản Lý Sơ Đồ (SubToolbar)
+### 🔗 4. Bảng Quản Lý Đường Nối (Connections Panel) & Kéo Thả Nhãn Trực Tiếp
+- **Tab Quản lý Đường nối trên Sidebar:**
+  - Tập trung danh sách toàn bộ các kết nối trong sơ đồ tại một bảng chuyên biệt.
+  - Tìm kiếm và lọc đường nối nhanh theo nhãn hoặc tên bước công việc.
+  - Xem chi tiết thông số: Node nguồn $\to$ Node đích, thông điệp luồng, kiểu nét (`solid` / `dashed`) và màu sắc.
+  - Đổi thứ tự thực hiện luồng với nút **Di chuyển lên / Di chuyển xuống**.
+  - Xóa nhanh từng đường nối hoặc xóa toàn bộ kết nối kèm hộp thoại xác nhận an toàn.
+- **Kéo thả vị trí nhãn thông điệp trực tiếp trên Canvas (`label_x`, `label_y`):**
+  - Cầm chuột kéo nhãn thông điệp luồng đến bất kỳ vị trí mong muốn nào trên canvas để tránh đè chữ lên node xung quanh.
+  - Nhãn có vị trí tùy biến được hiển thị viền nét đứt tinh tế, hỗ trợ nút "Đặt lại về tuyến mặc định" trong cửa sổ Edge Editor.
+
+---
+
+### 🔲 5. Chế Độ Quét Chọn Khối (Box Select) & Đổi Thứ Tự Làn Bơi
+- **Công cụ quét chọn khối Canvas (`B`):**
+  - Bật chế độ Quét chọn (Box Select) trên thanh phụ Canvas SubToolbar hoặc phím tắt `B`.
+  - Quét chuột tạo khung chữ nhật để chọn nhanh nhiều node cùng lúc trên nhiều frame và swimlane khác nhau.
+- **Di chuyển thứ tự Swimlane (Lên / Xuống):**
+  - Điều chỉnh thứ tự các làn bơi trực tiếp trong Kho Nhiệm Vụ (Role Palette) bằng nút **Di chuyển lên** và **Di chuyển xuống**.
+  - Canvas lập tức sắp xếp lại thứ tự các làn bơi mượt mà theo thời gian thực mà không làm hỏng tọa độ hay logic liên kết.
+- **Ngắt dòng thông minh (`wrapSwimlaneTitle` & `wrapNodeText`):**
+  - Tự động ngắt dòng cân đối cho tiêu đề vai trò và nội dung thẻ node dài, khắc phục triệt để lỗi tràn viền hoặc bị cắt cụt chữ trên cả Canvas và bản xuất SVG.
+
+---
+
+### 🧹 6. Tùy Chọn Xóa Toàn Diện & Quản Lý Sơ Đồ (SubToolbar)
 - **Xóa sạch toàn bộ Canvas (Clear Canvas):** Cho phép đặt lại toàn bộ vùng vẽ về trạng thái trắng tinh chỉ với 1 cú click (kèm hộp thoại xác nhận tránh bấm nhầm).
 - **Xóa từng sơ đồ riêng biệt:** Khi trên canvas có từ 2 sơ đồ trở lên, bạn có thể chọn xóa chính xác sơ đồ mong muốn trong danh sách chọn.
 
 ---
 
-### 🎨 5. Kiến Trúc 3 Tầng Dữ Liệu
+### 🎨 7. Kiến Trúc 3 Tầng Dữ Liệu
 1. **Tầng 1 - Kho Nhiệm Vụ (Role & Node Palette):** Quản lý vai trò (Roles) với mã màu riêng biệt. Phân loại tác vụ bằng biểu tượng góc trực quan (`user-action`, `bot`, `check`, `timer`). Tự động đếm tần suất sử dụng (`x0`, `x1`, `x2`...).
 2. **Tầng 2 - Trình Dựng Phân Đoạn (Frame Builder):** Gom nhóm quy trình thành các phân đoạn logic (Frames). Tự động clone các node độc lập, hỗ trợ mô tả chi tiết (`customLabel`) và liên kết luồng tuyến tính hoặc rẽ nhánh (`next_frame_target`).
 3. **Tầng 3 - Biểu Đồ Trực Quan (SVG Visual Canvas):** Vùng hiển thị sơ đồ Swimlane tự động chia làn, tính toán tọa độ, uốn cong dây nối mà không lo vỡ layout.
 
 ---
 
-### 💾 6. Quản Lý File & Xuất Bản Ngoại Tuyến (Offline Viewer)
+### 💾 8. Quản Lý File & Xuất Bản Ngoại Tuyến (Offline Viewer)
 - **Xuất File HTML Độc Lập:** Xuất sơ đồ ra 1 file `.html` duy nhất chạy offline 100%, tích hợp sẵn Dark Mode phát sáng, SVG Viewer và **nhúng sẵn dữ liệu JSON gốc bên trong**. Bạn có thể gửi file này cho đối tác xem ngay trên trình duyệt mà không cần cài app, hoặc import ngược lại vào Wode bất cứ lúc nào.
+- **Xuất SVG Chuẩn Điện Ảnh:** Đồng bộ 100% giao diện với Canvas: thẻ tiêu đề làn bơi có thanh nhấn màu dọc, đổ bóng mượt mà, hỗ trợ tọa độ nhãn tùy chỉnh và hiệu ứng phát sáng cho node đặc biệt (Kho dữ liệu `#0284C7` & Kênh trung gian `#7C3AED`).
 - **Cảnh Báo & Lưu Phiên Tự Động:** Khi đóng tab hoặc thoát app nếu có thay đổi chưa lưu, hệ thống sẽ nhắc bạn xuất file sao lưu phiên làm việc (`session_YYYYMMDD_HHmmss.json`).
 
 ---
@@ -236,6 +262,7 @@ Mở cài đặt **Cursor Settings** > **Features** > **MCP Servers** (hoặc t�
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Làm lại (Redo) |
 | `Ctrl + Q` | Chuyển chế độ Chọn & Kéo Node |
 | `Ctrl + A` | Chuyển chế độ Kéo di chuyển Canvas (Pan) |
+| `B` | Chuyển chế độ Quét chọn khối (Box Select) |
 | `Ctrl + Shift + A` | Chọn tất cả các node |
 | `Ctrl + Click` | Thêm / bớt node vào nhóm đang chọn |
 | `Shift + Click` | Chọn nhanh toàn bộ dải node theo luồng |

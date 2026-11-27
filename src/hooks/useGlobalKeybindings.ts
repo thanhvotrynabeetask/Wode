@@ -18,17 +18,23 @@ export function useGlobalKeybindings(allInstanceIds: string[], onFitToScreen?: (
       // If user is actively typing in an input field, do not trigger canvas shortcuts
       if (isInputActive) return;
 
-      if (matchesShortcut(e, keybindings.modePan)) {
+      if (
+        matchesShortcut(e, keybindings.modePan) ||
+        (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'a')
+      ) {
         e.preventDefault();
         setInteractionMode('pan');
-        addToast('info', 'Chế độ: Di chuyển Canvas (Pan)');
+        addToast('info', 'Chế độ: Di chuyển Canvas (Pan) — Kéo góc nhìn');
         return;
       }
 
-      if (matchesShortcut(e, keybindings.modeSelect)) {
+      if (
+        matchesShortcut(e, keybindings.modeSelect) ||
+        (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'q')
+      ) {
         e.preventDefault();
         setInteractionMode('select');
-        addToast('info', 'Chế độ: Chọn và Kéo (Select)');
+        addToast('info', 'Chế độ: Chọn & Kéo (Select) — Kéo vùng chọn hoặc di chuyển đối tượng');
         return;
       }
 
@@ -53,7 +59,10 @@ export function useGlobalKeybindings(allInstanceIds: string[], onFitToScreen?: (
       }
 
       // Select All (default Ctrl+Shift+A)
-      if (matchesShortcut(e, keybindings.selectAll)) {
+      if (
+        matchesShortcut(e, keybindings.selectAll) ||
+        (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a')
+      ) {
         e.preventDefault();
         selectAllInstances(allInstanceIds);
         addToast('info', `Đã chọn tất cả ${allInstanceIds.length} nhiệm vụ`);

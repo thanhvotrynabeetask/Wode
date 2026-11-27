@@ -42,6 +42,7 @@ export interface Translations {
   sidebar: {
     paletteTab: string;
     builderTab: string;
+    connectionsTab: string;
     collapse: string;
     expand: string;
   };
@@ -67,6 +68,9 @@ export interface Translations {
     unusedWarning: string;
     editRole: string;
     deleteRoleConfirm: string;
+    moveRoleUp: string;
+    moveRoleDown: string;
+    swimlaneMoved: string;
     editNode: string;
     deleteNodeConfirm: string;
     duplicateNode: string;
@@ -138,6 +142,7 @@ export interface Translations {
     moveEdgeUp: string;
     moveEdgeDown: string;
     deleteEdge: string;
+    deleteEdgeSuccess: string;
     edgeDetailsTitle: string;
     messagePlaceholder: string;
     messageShortPlaceholder: string;
@@ -179,6 +184,7 @@ export interface Translations {
   canvas: {
     modeSelect: string;
     modePan: string;
+    boxSelect: string;
     selectedCount: string;
     selectAll: string;
     spacingLabel: string;
@@ -205,6 +211,7 @@ export interface Translations {
     edgeEndpoints: string;
     resetRoute: string;
     deleteEdge: string;
+    deleteEdgeSuccess: string;
     diagramLabel: string;
     diagramSummary: string;
     activeEditing: string;
@@ -395,6 +402,7 @@ export const translations: Record<Language, Translations> = {
     sidebar: {
       paletteTab: 'Palette',
       builderTab: 'Frame Builder',
+      connectionsTab: 'Connections',
       collapse: 'Collapse sidebar',
       expand: 'Expand sidebar',
     },
@@ -420,6 +428,9 @@ export const translations: Record<Language, Translations> = {
       unusedWarning: 'Not used in any frame yet',
       editRole: 'Edit Role',
       deleteRoleConfirm: 'Delete role "{name}" and all associated nodes?',
+      moveRoleUp: 'Move swimlane up',
+      moveRoleDown: 'Move swimlane down',
+      swimlaneMoved: 'Swimlane reordered',
       editNode: 'Edit Template',
       deleteNodeConfirm: 'Delete node template "{name}"?',
       duplicateNode: 'Duplicate Node',
@@ -491,6 +502,7 @@ export const translations: Record<Language, Translations> = {
       moveEdgeUp: 'Move connection up',
       moveEdgeDown: 'Move connection down',
       deleteEdge: 'Delete connection',
+      deleteEdgeSuccess: 'Connection deleted successfully',
       edgeDetailsTitle: 'Connection Details #{number}',
       messagePlaceholder: 'Enter flow message (e.g., Submit for review, Respond...)',
       messageShortPlaceholder: 'Flow message name...',
@@ -532,6 +544,7 @@ export const translations: Record<Language, Translations> = {
     canvas: {
       modeSelect: 'Select & Move',
       modePan: 'Pan Canvas',
+      boxSelect: 'Box Select',
       selectedCount: '{count} selected',
       selectAll: 'Select All',
       spacingLabel: 'Spacing',
@@ -558,6 +571,7 @@ export const translations: Record<Language, Translations> = {
       edgeEndpoints: 'Connection Endpoints',
       resetRoute: 'Reset to Default Curved Route',
       deleteEdge: 'Delete Connection',
+      deleteEdgeSuccess: 'Connection deleted successfully',
       diagramLabel: 'Diagram {order}',
       diagramSummary: '• {frameCount} frame(s) ({nodeCount} tasks)',
       activeEditing: '● Active (Editing)',
@@ -747,6 +761,7 @@ export const translations: Record<Language, Translations> = {
     sidebar: {
       paletteTab: 'Kho Nhiệm Vụ',
       builderTab: 'Dựng Phân Đoạn',
+      connectionsTab: 'Đường Nối',
       collapse: 'Thu gọn thanh bên',
       expand: 'Mở rộng thanh bên',
     },
@@ -772,6 +787,9 @@ export const translations: Record<Language, Translations> = {
       unusedWarning: 'Chưa được đưa vào phân đoạn nào',
       editRole: 'Sửa vai trò',
       deleteRoleConfirm: 'Xóa vai trò "{name}" và toàn bộ node liên quan?',
+      moveRoleUp: 'Di chuyển swimlane lên',
+      moveRoleDown: 'Di chuyển swimlane xuống',
+      swimlaneMoved: 'Đã thay đổi thứ tự swimlane',
       editNode: 'Sửa node mẫu',
       deleteNodeConfirm: 'Xóa node mẫu "{name}"?',
       duplicateNode: 'Nhân bản node',
@@ -843,6 +861,7 @@ export const translations: Record<Language, Translations> = {
       moveEdgeUp: 'Di chuyển dây lên trên',
       moveEdgeDown: 'Di chuyển dây xuống dưới',
       deleteEdge: 'Xóa liên kết',
+      deleteEdgeSuccess: 'Đã xóa đường nối thành công',
       edgeDetailsTitle: 'Tùy chỉnh chi tiết luồng #{number}',
       messagePlaceholder: 'Nhập thông điệp luồng (ví dụ: Gửi duyệt, Phản hồi...)',
       messageShortPlaceholder: 'Tên thông điệp luồng...',
@@ -884,6 +903,7 @@ export const translations: Record<Language, Translations> = {
     canvas: {
       modeSelect: 'Chọn & Kéo Node',
       modePan: 'Di Chuyển Canvas (Pan)',
+      boxSelect: 'Quét chọn vùng',
       selectedCount: 'Đã chọn {count} node',
       selectAll: 'Chọn tất cả',
       spacingLabel: 'Khoảng cách',
@@ -910,6 +930,7 @@ export const translations: Record<Language, Translations> = {
       edgeEndpoints: 'Cổng tiếp xúc đầu cuối',
       resetRoute: 'Khôi phục đường uốn cong mặc định',
       deleteEdge: 'Xóa dây nối',
+      deleteEdgeSuccess: 'Đã xóa đường nối thành công',
       diagramLabel: 'Sơ đồ {order}',
       diagramSummary: '• {frameCount} phân đoạn ({nodeCount} nhiệm vụ)',
       activeEditing: '● Đang chọn chỉnh sửa',

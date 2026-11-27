@@ -82,16 +82,16 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
   return (
     <div
       onClick={onSelect}
-      className={`group relative bg-white border rounded-lg p-2 transition-all cursor-pointer ${
+      className={`group relative bg-white dark:bg-slate-800 border rounded-lg p-2 transition-all cursor-pointer ${
         isSelected
-          ? 'border-blue-500 ring-2 ring-blue-100 shadow-sm'
-          : 'border-gray-200 hover:border-gray-300 shadow-xs'
+          ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-100 dark:ring-blue-950/50 shadow-sm'
+          : 'border-gray-200 dark:border-slate-700/80 hover:border-gray-300 dark:hover:border-slate-600 shadow-xs'
       }`}
     >
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {/* Index in frame */}
-          <span className="text-[10px] font-mono text-gray-400 w-3.5 text-center shrink-0">
+          <span className="text-[10px] font-mono text-gray-400 dark:text-slate-400 w-3.5 text-center shrink-0">
             {index + 1}.
           </span>
 
@@ -104,7 +104,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
 
           {/* Corner Symbol */}
           {template && template.corner_symbol !== 'none' && (
-            <span className="text-gray-400 shrink-0">
+            <span className="text-gray-400 dark:text-slate-400 shrink-0">
               <CornerSymbolIcon symbol={template.corner_symbol} size={12} />
             </span>
           )}
@@ -152,7 +152,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
             <div className="min-w-0 flex-1">
               {/* Main Heading: Tên Node (Title) */}
               <p
-                className="text-xs font-semibold text-gray-800 dark:text-slate-200 line-clamp-2 break-words leading-tight"
+                className="text-xs font-semibold text-gray-800 dark:text-slate-100 line-clamp-2 break-words leading-tight"
                 title={nodeTitle}
                 style={{
                   display: '-webkit-box',
@@ -166,7 +166,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
               </p>
               {/* Mô tả / Ghi chú (Custom Label) hiển thị rõ bên dưới nếu có */}
               {nodeDescription && (
-                <p className="text-[11px] text-gray-500 dark:text-slate-400 whitespace-pre-line break-words mt-0.5" title={nodeDescription}>
+                <p className="text-[11px] text-gray-500 dark:text-slate-300 whitespace-pre-line break-words mt-0.5" title={nodeDescription}>
                   {nodeDescription}
                 </p>
               )}
@@ -190,7 +190,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
                 onMoveUp();
               }}
               title={t('builder.moveNodeUp')}
-              className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 disabled:opacity-20 transition-colors"
+              className="p-1 rounded text-gray-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors"
             >
               <ChevronUp size={13} />
             </button>
@@ -201,7 +201,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
                 onMoveDown();
               }}
               title={t('builder.moveNodeDown')}
-              className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 disabled:opacity-20 transition-colors"
+              className="p-1 rounded text-gray-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors"
             >
               <ChevronDown size={13} />
             </button>
@@ -212,7 +212,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
                 setLabelText(node.custom_label || '');
               }}
               title={t('builder.editNodeNote')}
-              className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-1 rounded text-gray-400 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <Edit3 size={12} />
             </button>
@@ -222,7 +222,7 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
                 onRemove();
               }}
               title={t('builder.deleteFromFrame')}
-              className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              className="p-1 rounded text-gray-400 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700 transition-colors"
             >
               <Trash2 size={11} />
             </button>
@@ -236,21 +236,21 @@ export const FrameNodeSlot: React.FC<FrameNodeSlotProps> = ({
           onClick={() => setShowListingEditor(!showListingEditor)}
           className={`flex items-center gap-1 text-[10px] font-medium rounded px-1.5 py-0.5 transition-colors ${
             listings.length > 0
-              ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
-              : 'text-gray-400 hover:text-blue-600 hover:bg-gray-50'
+              ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+              : 'text-gray-400 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700/60'
           }`}
         >
           <List size={10} />
           {listings.length > 0 ? t('builder.itemsCount', { count: listings.length }) : t('builder.addList')}
         </button>
         {showListingEditor && (
-          <span className="text-[9px] text-gray-400">{t('builder.clickToEdit')}</span>
+          <span className="text-[9px] text-gray-400 dark:text-slate-400">{t('builder.clickToEdit')}</span>
         )}
       </div>
 
       {/* Full Listing Editor in Side Panel */}
       {showListingEditor && (
-        <div className="mt-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-1.5 bg-gray-50 dark:bg-slate-900/90 border border-gray-200 dark:border-slate-700 rounded-lg p-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
           {/* Existing Items */}
           {listings.length > 0 && (
             <div className="space-y-1">

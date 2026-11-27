@@ -210,21 +210,46 @@ Open **Cursor Settings** > **Features** > **MCP Servers** (or create `.cursor/mc
 
 ---
 
-### 🧹 4. Canvas Clearing & Diagram Management (SubToolbar)
+### 🔗 4. Connections Management Panel & Draggable Connection Labels
+- **Dedicated Connections Panel in Sidebar:**
+  - View, search, and manage all cross-lane and sequential connections in one centralized panel.
+  - Inspect connection details (source $\to$ target, flow message, solid/dashed line style, and color).
+  - Reorder flow execution sequence with **Move Up / Move Down** buttons.
+  - Delete individual connections or clear all connections with safety confirmation.
+- **Direct Canvas Draggable Labels (`label_x`, `label_y`):**
+  - Grab and move any connection message label directly on the canvas to prevent overlap with nearby cards.
+  - Visual dashed outline marks custom-positioned labels, with instant "Reset Route" option in the Edge Editor.
+
+---
+
+### 🔲 5. Box Selection & Swimlane Reordering
+- **Canvas Box Selection (`B`):**
+  - Toggle Box Selection mode via the Canvas SubToolbar or press shortcut `B`.
+  - Click and drag a marquee box on the canvas to multi-select nodes across multiple frames and lanes.
+- **Swimlane Order Adjustment (Up / Down):**
+  - Reorder swimlane tiers directly within the Role Palette using **Move Up** and **Move Down** controls.
+  - Canvas swimlanes re-sort smoothly in real time without breaking node associations or layout geometry.
+- **Intelligent Text Wrapping (`wrapSwimlaneTitle`):**
+  - Multi-line balanced wrapping for long role names and node titles prevents text clipping in both Canvas and SVG exports.
+
+---
+
+### 🧹 6. Canvas Clearing & Diagram Management (SubToolbar)
 - **Clear Canvas:** Reset the entire canvas to a blank slate in one click, protected by a safety confirmation dialog.
 - **Delete Selected Diagram:** When working with multiple diagrams, easily remove a specific diagram without affecting others.
 
 ---
 
-### 🎨 5. 3-Tier Data Architecture
+### 🎨 7. 3-Tier Data Architecture
 1. **Tier 1 - Palette & Role Library:** Manage swimlane actors with custom hex colors. Categorize actions with corner symbols (`user-action`, `bot`, `check`, `timer`) and track template usage counts (`x0`, `x1`, `x2`...).
 2. **Tier 2 - Frame Builder:** Structure business phases, configure custom task notes (`customLabel`), and define linear or branching handoffs (`next_frame_target`).
 3. **Tier 3 - SVG Visual Canvas:** Interactive swimlane canvas with live dragging, multi-selection, and automatic layout synchronization.
 
 ---
 
-### 💾 6. Standalone Offline HTML Exporter & Auto-Save Recovery
+### 💾 8. Standalone Offline HTML Exporter & Auto-Save Recovery
 - **Single-File Offline Viewer:** Export diagrams as standalone `.html` files featuring dark mode, interactive SVG zoom/pan, and **embedded raw JSON source data**. Open in any browser without installing Wode, or re-import the file at any time.
+- **High-Fidelity SVG Export:** Exact parity with canvas rendering — multi-line lane header cards, drop shadows, custom label positions, and glowing styling for Storage (`#0284C7`) and Mediator (`#7C3AED`) special nodes.
 - **Session Recovery:** Prompts automatic session backup (`session_YYYYMMDD_HHmmss.json`) if you attempt to leave with unsaved modifications.
 
 ---
@@ -237,6 +262,7 @@ Open **Cursor Settings** > **Features** > **MCP Servers** (or create `.cursor/mc
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
 | `Ctrl + Q` | Toggle Node Selection & Drag Mode |
 | `Ctrl + A` | Toggle Canvas Pan Mode |
+| `B` | Toggle Canvas Box Selection Mode |
 | `Ctrl + Shift + A` | Select all nodes on canvas |
 | `Ctrl + Click` | Add / remove node from multi-selection |
 | `Shift + Click` | Select sequential flow range |

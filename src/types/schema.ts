@@ -77,6 +77,8 @@ export interface EdgeConfig {
   curvature_offset?: number; // Independent curvature variation to avoid collision
   source_anchor?: NodeBorderAnchor;
   target_anchor?: NodeBorderAnchor;
+  label_x?: number; // Custom X position of the message label pill on canvas
+  label_y?: number; // Custom Y position of the message label pill on canvas
 }
 
 export interface EdgeRoute {
@@ -84,6 +86,7 @@ export interface EdgeRoute {
   waypoints?: { x: number; y: number }[];
   sourceAnchor?: NodeBorderAnchor;
   targetAnchor?: NodeBorderAnchor;
+  labelPosition?: { x: number; y: number };
 }
 
 export interface Frame {

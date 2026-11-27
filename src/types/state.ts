@@ -1,5 +1,5 @@
-export type ActivePanel = 'palette' | 'builder' | 'settings';
-export type CanvasInteractionMode = 'select' | 'pan';
+export type ActivePanel = 'palette' | 'builder' | 'connections' | 'settings';
+export type CanvasInteractionMode = 'select' | 'pan' | 'boxSelect';
 
 export interface SelectionState {
   selectedFrameId: string | null;

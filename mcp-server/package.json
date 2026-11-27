@@ -1,6 +1,6 @@
 {
   "name": "wode-mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP connector server for Wode Swimlane Diagram Builder",
   "homepage": "https://wode-beta.vercel.app",
   "repository": {

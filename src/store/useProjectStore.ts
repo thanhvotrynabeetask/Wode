@@ -41,6 +41,8 @@ interface ProjectState {
   addRole: (name: string, color: string) => void;
   updateRole: (id: string, updates: Partial<Omit<Role, 'id'>>) => void;
   removeRole: (id: string) => void;
+  reorderRoles: (orderedIds: string[]) => void;
+  moveRole: (roleId: string, direction: 'up' | 'down') => void;
 
   // Node Templates
   addNodeTemplate: (template: Omit<NodeTemplate, 'base_id'>) => void;
@@ -72,7 +74,14 @@ interface ProjectState {
   ) => void;
   resetNodePositions: () => void;
 
-  // Edges
+  // Edges (Diagram-level & frame-independent)
+  getAllEdges: () => EdgeConfig[];
+  setEdges: (edges: EdgeConfig[]) => void;
+  addEdge: (edge: EdgeConfig) => void;
+  updateEdgeConfig: (fromInstance: string, toInstance: string, updates: Partial<EdgeConfig>) => void;
+  removeEdge: (fromInstance: string, toInstance: string) => void;
+  reorderEdges: (edges: EdgeConfig[]) => void;
+  clearAllEdges: () => void;
   setEdgeConfig: (frameId: string, edges: EdgeConfig[]) => void;
   updateEdge: (frameId: string, fromInstance: string, toInstance: string, updates: Partial<EdgeConfig>) => void;
   updateEdgeByIndex: (frameId: string, edgeIndex: number, updates: Partial<EdgeConfig>) => void;
@@ -82,8 +91,8 @@ interface ProjectState {
     route:
       | {
           waypoints?: { x: number; y: number }[];
-          sourceAnchor?: NodeBorderAnchor;
-          targetAnchor?: NodeBorderAnchor;
+          sourceAnchor?: NodeBorderAnchor | null;
+          targetAnchor?: NodeBorderAnchor | null;
         }
       | { x: number; y: number }[]
       | null
@@ -740,6 +749,40 @@ export const useProjectStore = create<ProjectState>()((setOriginal, get) => {
       };
     }),
 
+  reorderRoles: (orderedIds) =>
+    set((s) => {
+      const roleMap = new Map(s.schema.roles.map((r) => [r.id, r]));
+      const reordered = orderedIds
+        .map((id) => roleMap.get(id))
+        .filter(Boolean) as Role[];
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { roles: reordered }),
+        isDirty: true,
+      };
+    }),
+
+  moveRole: (roleId, direction) =>
+    set((s) => {
+      const roles = [...s.schema.roles];
+      const index = roles.findIndex((r) => r.id === roleId);
+      if (index === -1) return s;
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= roles.length) return s;
+
+      const temp = roles[index];
+      roles[index] = roles[targetIndex];
+      roles[targetIndex] = temp;
+
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { roles }),
+        isDirty: true,
+      };
+    }),
+
   addNodeTemplate: (template) =>
     set((s) => {
       const updatedPalette = [...s.schema.node_palette, { ...template, base_id: generateNodeId() }];
@@ -1070,14 +1113,27 @@ export const useProjectStore = create<ProjectState>()((setOriginal, get) => {
     set((s) => {
       const updatedFrames = s.schema.frames.map((f) =>
         !frameId || f.frame_id === frameId
-          ? { ...f, nodes: f.nodes.filter((n) => n.instance_id !== instanceId) }
+          ? {
+              ...f,
+              nodes: f.nodes.filter((n) => n.instance_id !== instanceId),
+              edges_config: (f.edges_config || []).filter(
+                (e) => e.from_instance !== instanceId && e.to_instance !== instanceId
+              ),
+            }
           : f
       );
       const updatedNodes = (s.schema.nodes || []).filter((n) => n.instance_id !== instanceId);
+      const updatedEdges = (s.schema.edges_config || []).filter(
+        (e) => e.from_instance !== instanceId && e.to_instance !== instanceId
+      );
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames, nodes: updatedNodes }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          frames: updatedFrames,
+          nodes: updatedNodes,
+          edges_config: updatedEdges,
+        }),
         isDirty: true,
       };
     }),
@@ -1365,6 +1421,156 @@ export const useProjectStore = create<ProjectState>()((setOriginal, get) => {
       };
     }),
 
+  getAllEdges: () => {
+    const s = get();
+    if (s.schema.edges_config && s.schema.edges_config.length > 0) {
+      return s.schema.edges_config;
+    }
+    const legacyEdges: EdgeConfig[] = [];
+    s.schema.frames.forEach((f) => {
+      if (f.edges_config) legacyEdges.push(...f.edges_config);
+    });
+    return legacyEdges;
+  },
+
+  setEdges: (edges) =>
+    set((s) => ({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: updateActiveDiagramInSchema(s.schema, { edges_config: edges }),
+      isDirty: true,
+    })),
+
+  addEdge: (edge) =>
+    set((s) => {
+      let current = [...(s.schema.edges_config || [])];
+      if (current.length === 0 && s.schema.frames.some((f) => f.edges_config && f.edges_config.length > 0)) {
+        s.schema.frames.forEach((f) => {
+          if (f.edges_config) current.push(...f.edges_config);
+        });
+      }
+      const existingIdx = current.findIndex(
+        (e) => e.from_instance === edge.from_instance && e.to_instance === edge.to_instance
+      );
+      if (existingIdx >= 0) {
+        current[existingIdx] = { ...current[existingIdx], ...edge };
+      } else {
+        current.push({
+          edge_id: edge.edge_id || `edge_${Date.now() % 100000}_${Math.floor(Math.random() * 1000)}`,
+          ...edge,
+        });
+      }
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, { edges_config: current }),
+        isDirty: true,
+      };
+    }),
+
+  updateEdgeConfig: (fromInstance, toInstance, updates) =>
+    set((s) => {
+      let current = [...(s.schema.edges_config || [])];
+      if (current.length === 0 && s.schema.frames.some((f) => f.edges_config && f.edges_config.length > 0)) {
+        s.schema.frames.forEach((f) => {
+          if (f.edges_config) current.push(...f.edges_config);
+        });
+      }
+      const existingIdx = current.findIndex(
+        (e) => e.from_instance === fromInstance && e.to_instance === toInstance
+      );
+      if (existingIdx >= 0) {
+        current[existingIdx] = { ...current[existingIdx], ...updates };
+      } else {
+        current.push({
+          edge_id: `edge_${fromInstance}_${toInstance}`,
+          from_instance: fromInstance,
+          to_instance: toInstance,
+          message_label: updates.message_label || '',
+          flow_type: updates.flow_type || 'solid',
+          ...updates,
+        });
+      }
+
+      // Also sync legacy frames if any matched
+      const updatedFrames = s.schema.frames.map((f) => ({
+        ...f,
+        edges_config: (f.edges_config || []).map((e) =>
+          e.from_instance === fromInstance && e.to_instance === toInstance
+            ? { ...e, ...updates }
+            : e
+        ),
+      }));
+
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, {
+          edges_config: current,
+          frames: updatedFrames,
+        }),
+        isDirty: true,
+      };
+    }),
+
+  removeEdge: (fromInstance, toInstance) =>
+    set((s) => {
+      let current = [...(s.schema.edges_config || [])];
+      if (current.length === 0 && s.schema.frames.some((f) => f.edges_config && f.edges_config.length > 0)) {
+        s.schema.frames.forEach((f) => {
+          if (f.edges_config) current.push(...f.edges_config);
+        });
+      }
+      const filtered = current.filter(
+        (e) => !(e.from_instance === fromInstance && e.to_instance === toInstance)
+      );
+      const updatedFrames = s.schema.frames.map((f) => ({
+        ...f,
+        edges_config: (f.edges_config || []).filter(
+          (e) => !(e.from_instance === fromInstance && e.to_instance === toInstance)
+        ),
+      }));
+      const routes = { ...(s.schema.edge_routes || {}) };
+      delete routes[`${fromInstance}>${toInstance}`];
+
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, {
+          edges_config: filtered,
+          frames: updatedFrames,
+          edge_routes: routes,
+        }),
+        isDirty: true,
+      };
+    }),
+
+  reorderEdges: (edges) =>
+    set((s) => ({
+      past: pushHistory(s.past, s.schema),
+      future: [],
+      schema: updateActiveDiagramInSchema(s.schema, { edges_config: edges }),
+      isDirty: true,
+    })),
+
+  clearAllEdges: () =>
+    set((s) => {
+      const updatedFrames = s.schema.frames.map((f) => ({
+        ...f,
+        edges_config: [],
+      }));
+      return {
+        past: pushHistory(s.past, s.schema),
+        future: [],
+        schema: updateActiveDiagramInSchema(s.schema, {
+          edges_config: [],
+          frames: updatedFrames,
+          edge_routes: {},
+        }),
+        isDirty: true,
+      };
+    }),
+
   setEdgeConfig: (frameId, edges) =>
     set((s) => {
       const updatedFrames = s.schema.frames.map((f) =>
@@ -1415,15 +1621,25 @@ export const useProjectStore = create<ProjectState>()((setOriginal, get) => {
                 flow_type: updates.flow_type || 'solid',
                 color: updates.color,
                 curvature_offset: updates.curvature_offset,
+                label_x: updates.label_x,
+                label_y: updates.label_y,
               },
             ],
           };
         }
       });
+      const updatedEdges = (s.schema.edges_config || []).map((e) =>
+        e.from_instance === fromInstance && e.to_instance === toInstance
+          ? { ...e, ...updates }
+          : e
+      );
       return {
         past: pushHistory(s.past, s.schema),
         future: [],
-        schema: updateActiveDiagramInSchema(s.schema, { frames: updatedFrames }),
+        schema: updateActiveDiagramInSchema(s.schema, {
+          frames: updatedFrames,
+          edges_config: updatedEdges,
+        }),
         isDirty: true,
       };
     }),
@@ -1453,11 +1669,17 @@ export const useProjectStore = create<ProjectState>()((setOriginal, get) => {
         const existing = routes[routeKey] || {};
         const updated: EdgeRoute = {
           ...existing,
-          ...(waypoints !== undefined ? { waypoints } : {}),
-          ...(sourceAnchor !== undefined ? { sourceAnchor } : {}),
-          ...(targetAnchor !== undefined ? { targetAnchor } : {}),
+          ...(waypoints !== undefined ? { waypoints: waypoints || undefined } : {}),
         };
-        if (updated.waypoints && updated.waypoints.length === 0) {
+        if (sourceAnchor !== undefined) {
+          if (sourceAnchor === null) delete updated.sourceAnchor;
+          else updated.sourceAnchor = sourceAnchor;
+        }
+        if (targetAnchor !== undefined) {
+          if (targetAnchor === null) delete updated.targetAnchor;
+          else updated.targetAnchor = targetAnchor;
+        }
+        if (waypoints === null || (updated.waypoints && updated.waypoints.length === 0)) {
           delete updated.waypoints;
         }
         if (updated.waypoints || updated.sourceAnchor || updated.targetAnchor) {

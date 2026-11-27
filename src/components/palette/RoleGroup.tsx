@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { Role, NodeTemplate } from '../../types/schema';
 import { NodeCard } from './NodeCard';
-import { ChevronDown, ChevronRight, Plus, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Plus, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 
 interface RoleGroupProps {
   role: Role;
   templates: NodeTemplate[];
   getUsageCount: (baseId: string) => number;
+  index?: number;
+  total?: number;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   onEditRole: () => void;
   onDeleteRole: () => void;
   onAddTemplate: () => void;
@@ -22,6 +26,10 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
   role,
   templates,
   getUsageCount,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
   onEditRole,
   onDeleteRole,
   onAddTemplate,
@@ -36,17 +44,17 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="border-b border-gray-200/80 last:border-b-0 bg-white">
+    <div className="border-b border-gray-200/80 dark:border-slate-800 last:border-b-0 bg-white dark:bg-slate-900">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50/70 hover:bg-gray-100/60 transition-colors">
+      <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50/70 dark:bg-slate-800/60 hover:bg-gray-100/60 dark:hover:bg-slate-800 transition-colors">
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center gap-2 min-w-0 flex-1 text-left"
         >
           {collapsed ? (
-            <ChevronRight size={14} className="text-gray-400 shrink-0" />
+            <ChevronRight size={14} className="text-gray-400 dark:text-slate-500 shrink-0" />
           ) : (
-            <ChevronDown size={14} className="text-gray-400 shrink-0" />
+            <ChevronDown size={14} className="text-gray-400 dark:text-slate-500 shrink-0" />
           )}
 
           {/* Role color indicator */}
@@ -56,18 +64,39 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
           />
 
           {/* Role title */}
-          <span className="text-xs font-semibold text-gray-800 truncate" title={role.name}>
+          <span className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate" title={role.name}>
             {role.name}
           </span>
 
           {/* Template count badge */}
-          <span className="text-[10px] bg-gray-200/80 text-gray-600 rounded-full px-1.5 py-0.2 shrink-0">
+          <span className="text-[10px] bg-gray-200/80 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded-full px-1.5 py-0.2 shrink-0">
             {templates.length}
           </span>
         </button>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 shrink-0 ml-2">
+        <div className="flex items-center gap-0.5 shrink-0 ml-2">
+          {onMoveUp && (
+            <button
+              onClick={onMoveUp}
+              disabled={index === 0}
+              title={t('palette.moveRoleUp') || 'Di chuyển swimlane lên'}
+              className="p-1 rounded text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 disabled:opacity-20 transition-colors"
+            >
+              <ChevronUp size={13} />
+            </button>
+          )}
+          {onMoveDown && (
+            <button
+              onClick={onMoveDown}
+              disabled={total !== undefined && index !== undefined && index >= total - 1}
+              title={t('palette.moveRoleDown') || 'Di chuyển swimlane xuống'}
+              className="p-1 rounded text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 disabled:opacity-20 transition-colors"
+            >
+              <ChevronDown size={13} />
+            </button>
+          )}
+
           <button
             onClick={onAddTemplate}
             title={t('palette.addNodeTemplate')}
@@ -79,7 +108,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
           <div className="relative">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200/60 transition-colors"
+              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-200/60 dark:hover:bg-slate-700 transition-colors"
             >
               <MoreHorizontal size={14} />
             </button>
@@ -87,13 +116,13 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-30 text-xs">
+                <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-100 dark:border-slate-700 py-1 z-30 text-xs">
                   <button
                     onClick={() => {
                       setMenuOpen(false);
                       onEditRole();
                     }}
-                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     <Edit2 size={12} />
                     {t('palette.editRole')}
@@ -103,7 +132,7 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
                       setMenuOpen(false);
                       onDeleteRole();
                     }}
-                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-red-600 hover:bg-red-50"
+                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700"
                   >
                     <Trash2 size={12} />
                     {t('common.delete')}
@@ -117,10 +146,10 @@ export const RoleGroup: React.FC<RoleGroupProps> = ({
 
       {/* Node templates in role */}
       {!collapsed && (
-        <div className="p-2.5 space-y-2 bg-gray-50/30">
+        <div className="p-2.5 space-y-2 bg-gray-50/30 dark:bg-slate-900/60">
           {templates.length === 0 ? (
-            <div className="text-center py-3 px-2 border border-dashed border-gray-200 rounded-lg">
-              <p className="text-[11px] text-gray-400 mb-1.5">{t('palette.noSampleTemplates')}</p>
+            <div className="text-center py-3 px-2 border border-dashed border-gray-200 dark:border-slate-700 rounded-lg">
+              <p className="text-[11px] text-gray-400 dark:text-slate-400 mb-1.5">{t('palette.noSampleTemplates')}</p>
               <button
                 onClick={onAddTemplate}
                 className="inline-flex items-center gap-1 text-[11px] text-blue-600 font-medium hover:underline"

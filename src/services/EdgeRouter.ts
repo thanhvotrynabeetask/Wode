@@ -505,19 +505,66 @@ export function buildManualPoints(
   if (waypoints.length === 0) {
     return buildOrthogonalConnector(start, end, startSide, endSide);
   }
+
+  // 1. Straight vertical alignment check: if nodes and waypoints are all vertically aligned
+  const isOpposingVertical =
+    (startSide === 'bottom' && endSide === 'top') ||
+    (startSide === 'top' && endSide === 'bottom');
+  if (isOpposingVertical && Math.abs(start.x - end.x) <= STRAIGHT_ALIGN_TOLERANCE) {
+    const alignX = Math.round((start.x + end.x) / 2);
+    const allNearAlignX = waypoints.every((w) => Math.abs(w.x - alignX) <= STRAIGHT_ALIGN_TOLERANCE);
+    if (allNearAlignX) {
+      return [
+        { x: alignX, y: start.y },
+        { x: alignX, y: end.y },
+      ];
+    }
+  }
+
+  // 2. Straight horizontal alignment check: if nodes and waypoints are all horizontally aligned
+  const isOpposingHorizontal =
+    (startSide === 'right' && endSide === 'left') ||
+    (startSide === 'left' && endSide === 'right');
+  if (isOpposingHorizontal && Math.abs(start.y - end.y) <= STRAIGHT_ALIGN_TOLERANCE) {
+    const alignY = Math.round((start.y + end.y) / 2);
+    const allNearAlignY = waypoints.every((w) => Math.abs(w.y - alignY) <= STRAIGHT_ALIGN_TOLERANCE);
+    if (allNearAlignY) {
+      return [
+        { x: start.x, y: alignY },
+        { x: end.x, y: alignY },
+      ];
+    }
+  }
+
   const pStart = getPortStubPoint(start, startSide, PORT_STUB);
   const pEnd = getPortStubPoint(end, endSide, PORT_STUB);
 
-  const pts: Point[] = [start, pStart, ...waypoints.map((w) => ({ x: w.x, y: w.y })), pEnd, end];
-  const k = pts.length - 2;
+  const rawKeyPoints: Point[] = [pStart, ...waypoints, pEnd];
+  const pts: Point[] = [start, pStart];
 
-  for (let j = 1; j < k; j++) {
-    if (j % 2 === 1) pts[j + 1].y = pts[j].y;
-    else pts[j + 1].x = pts[j].x;
+  for (let i = 0; i < rawKeyPoints.length - 1; i++) {
+    const cur = pts[pts.length - 1];
+    const next = rawKeyPoints[i + 1];
+
+    if (Math.abs(cur.x - next.x) < 0.01 || Math.abs(cur.y - next.y) < 0.01) {
+      pts.push({ x: next.x, y: next.y });
+    } else {
+      const lastSegmentVertical =
+        pts.length >= 2 && Math.abs(pts[pts.length - 1].x - pts[pts.length - 2].x) < 0.01;
+      if (lastSegmentVertical) {
+        pts.push({ x: next.x, y: cur.y });
+        pts.push({ x: next.x, y: next.y });
+      } else {
+        pts.push({ x: cur.x, y: next.y });
+        pts.push({ x: next.x, y: next.y });
+      }
+    }
   }
-  pts[k].y = pEnd.y;
 
-  return simplifyPolyline(pts);
+  pts.push(end);
+
+  const simplified = simplifyPolyline(pts);
+  return straightenAlignedPolyline(simplified, STRAIGHT_ALIGN_TOLERANCE);
 }
 
 /** Converts an edited polyline back into the interior bend points that get persisted. */

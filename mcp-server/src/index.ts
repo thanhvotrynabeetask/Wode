@@ -15,7 +15,7 @@ LiveSyncServer.start(wsPort);
 
 const server = new McpServer({
   name: 'wode-mcp-server',
-  version: '1.0.0',
+  version: '1.1.0',
 });
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ export const RolePalette: React.FC = () => {
     addRole,
     updateRole,
     removeRole,
+    moveRole,
     addNodeTemplate,
     updateNodeTemplate,
     removeNodeTemplate,
@@ -249,12 +250,22 @@ export const RolePalette: React.FC = () => {
             </div>
           </div>
         ) : (
-          filteredRoles.map(({ role, templates }) => (
+          filteredRoles.map(({ role, templates }, rIdx) => (
             <RoleGroup
               key={role.id}
               role={role}
               templates={templates}
               getUsageCount={getUsageCount}
+              index={rIdx}
+              total={schema.roles.length}
+              onMoveUp={() => {
+                moveRole(role.id, 'up');
+                addToast('info', t('palette.swimlaneMoved') || 'Đã thay đổi thứ tự swimlane');
+              }}
+              onMoveDown={() => {
+                moveRole(role.id, 'down');
+                addToast('info', t('palette.swimlaneMoved') || 'Đã thay đổi thứ tự swimlane');
+              }}
               onEditRole={() => {
                 setEditingRole(role);
                 setRoleModalOpen(true);

@@ -89,6 +89,7 @@ export interface LayoutEdge {
   isManualRoute: boolean;
   labelX: number;
   labelY: number;
+  labelCustom?: boolean;
   label?: string;
   flowType: FlowType;
   color?: string;
@@ -142,6 +143,8 @@ interface RawEdgeSpec {
   isMacro: boolean;
   sourceAnchor?: NodeBorderAnchor;
   targetAnchor?: NodeBorderAnchor;
+  labelX?: number;
+  labelY?: number;
 }
 
 function getDiagramList(schema: ProjectSchema): DiagramSection[] {
@@ -211,9 +214,9 @@ export class LayoutEngine {
           // Each line takes at least 1 visual row; if line exceeds ~22 chars, estimate wrapping rows
           visualLineCount += Math.max(1, Math.ceil(line.length / 22));
         }
-        if (visualLineCount > 1) {
-          height += (visualLineCount - 1) * 16;
-        }
+        // If title also wraps, give extra breathing room for the label
+        const titleWrapped = title.length > 20 || title.includes('\n');
+        height += visualLineCount * 14 + (titleWrapped ? 6 : 0);
       }
       if (
         nodeInst.listings &&
@@ -595,7 +598,7 @@ export class LayoutEngine {
             (maxCol + 1) * defaultNodeWidth + maxCol * nodeGapX,
             maxNodeRightX - frameStartX
           );
-          frameContentWidth = frame.custom_width ? Math.max(100, frame.custom_width) : naturalWidth;
+          frameContentWidth = frame.custom_width ? Math.max(frame.custom_width, naturalWidth) : naturalWidth;
           currentFrameX = Math.max(currentFrameX, frameStartX + frameContentWidth + frameGap);
         }
 
@@ -624,11 +627,11 @@ export class LayoutEngine {
       // 4. Collect and Route Edges for this Diagram
       const rawEdges: RawEdgeSpec[] = [];
 
-      // 4a. Standalone edges (diagram-level edges)
+      // 4a. Diagram-level explicit edges (independent of frames)
       if (diag.edges_config && diag.edges_config.length > 0) {
         diag.edges_config.forEach((edgeConf, eIdx) => {
           rawEdges.push({
-            id: edgeConf.edge_id || `edge_standalone_${eIdx}`,
+            id: edgeConf.edge_id || `edge_diag_${eIdx}`,
             fromInstanceId: edgeConf.from_instance,
             toInstanceId: edgeConf.to_instance,
             frameId: '',
@@ -639,80 +642,94 @@ export class LayoutEngine {
             isMacro: false,
             sourceAnchor: edgeConf.source_anchor,
             targetAnchor: edgeConf.target_anchor,
+            labelX: edgeConf.label_x,
+            labelY: edgeConf.label_y,
           });
         });
-      } else if (diag.frames.length === 0 && diag.nodes && diag.nodes.length >= 2) {
-        // Auto sequential edge connection when no frames and no custom edges defined
-        for (let i = 0; i < diag.nodes.length - 1; i++) {
-          rawEdges.push({
-            id: `auto_standalone_${i}`,
-            fromInstanceId: diag.nodes[i].instance_id,
-            toInstanceId: diag.nodes[i + 1].instance_id,
-            frameId: '',
-            label: undefined,
-            flowType: 'solid',
-            isMacro: false,
-          });
-        }
-      }
-
-      diag.frames.forEach((frame) => {
-        if (frame.nodes.length < 2) return;
-        if (frame.edges_config && frame.edges_config.length > 0) {
-          frame.edges_config.forEach((edgeConf, eIdx) => {
-            rawEdges.push({
-              id: edgeConf.edge_id || `edge_${frame.frame_id}_${eIdx}`,
-              fromInstanceId: edgeConf.from_instance,
-              toInstanceId: edgeConf.to_instance,
-              frameId: frame.frame_id,
-              label: edgeConf.message_label,
-              flowType: edgeConf.flow_type || 'solid',
-              color: edgeConf.color,
-              curvatureOffset: edgeConf.curvature_offset,
-              isMacro: false,
-              sourceAnchor: edgeConf.source_anchor,
-              targetAnchor: edgeConf.target_anchor,
+      } else {
+        // Fallback: check if legacy frame-level edges exist
+        let hasFrameEdges = false;
+        diag.frames.forEach((frame) => {
+          if (frame.edges_config && frame.edges_config.length > 0) {
+            hasFrameEdges = true;
+            frame.edges_config.forEach((edgeConf, eIdx) => {
+              rawEdges.push({
+                id: edgeConf.edge_id || `edge_${frame.frame_id}_${eIdx}`,
+                fromInstanceId: edgeConf.from_instance,
+                toInstanceId: edgeConf.to_instance,
+                frameId: frame.frame_id,
+                label: edgeConf.message_label,
+                flowType: edgeConf.flow_type || 'solid',
+                color: edgeConf.color,
+                curvatureOffset: edgeConf.curvature_offset,
+                isMacro: false,
+                sourceAnchor: edgeConf.source_anchor,
+                targetAnchor: edgeConf.target_anchor,
+                labelX: edgeConf.label_x,
+                labelY: edgeConf.label_y,
+              });
             });
-          });
-        } else {
-          for (let i = 0; i < frame.nodes.length - 1; i++) {
-            rawEdges.push({
-              id: `auto_${frame.frame_id}_${i}`,
-              fromInstanceId: frame.nodes[i].instance_id,
-              toInstanceId: frame.nodes[i + 1].instance_id,
-              frameId: frame.frame_id,
-              label: undefined,
-              flowType: 'solid',
-              isMacro: false,
+          }
+        });
+
+        // Only if NO explicit edges exist at all, generate auto sequential edges
+        if (!hasFrameEdges) {
+          if (diag.frames.length === 0 && diag.nodes && diag.nodes.length >= 2) {
+            // Auto sequential edge connection when no frames and no custom edges defined
+            for (let i = 0; i < diag.nodes.length - 1; i++) {
+              rawEdges.push({
+                id: `auto_standalone_${i}`,
+                fromInstanceId: diag.nodes[i].instance_id,
+                toInstanceId: diag.nodes[i + 1].instance_id,
+                frameId: '',
+                label: undefined,
+                flowType: 'solid',
+                isMacro: false,
+              });
+            }
+          } else if (diag.frames.length > 0) {
+            diag.frames.forEach((frame) => {
+              if (frame.nodes.length < 2) return;
+              for (let i = 0; i < frame.nodes.length - 1; i++) {
+                rawEdges.push({
+                  id: `auto_${frame.frame_id}_${i}`,
+                  fromInstanceId: frame.nodes[i].instance_id,
+                  toInstanceId: frame.nodes[i + 1].instance_id,
+                  frameId: frame.frame_id,
+                  label: undefined,
+                  flowType: 'solid',
+                  isMacro: false,
+                });
+              }
+            });
+
+            // Inter-Frame Macro-flow
+            diag.frames.forEach((frame, idx) => {
+              if (frame.nodes.length === 0) return;
+              const lastNodeInCurrentFrame = frame.nodes[frame.nodes.length - 1];
+
+              let targetFrame: typeof diag.frames[0] | undefined;
+              if (frame.next_frame_target) {
+                targetFrame = diag.frames.find((f) => f.frame_id === frame.next_frame_target);
+              } else if (idx < diag.frames.length - 1) {
+                targetFrame = diag.frames[idx + 1];
+              }
+
+              if (targetFrame && targetFrame.nodes.length > 0) {
+                const firstNodeInTargetFrame = targetFrame.nodes[0];
+                rawEdges.push({
+                  id: `macro_${frame.frame_id}_to_${targetFrame.frame_id}`,
+                  fromInstanceId: lastNodeInCurrentFrame.instance_id,
+                  toInstanceId: firstNodeInTargetFrame.instance_id,
+                  label: undefined,
+                  flowType: 'solid',
+                  isMacro: true,
+                });
+              }
             });
           }
         }
-      });
-
-      // Inter-Frame Macro-flow
-      diag.frames.forEach((frame, idx) => {
-        if (frame.nodes.length === 0) return;
-        const lastNodeInCurrentFrame = frame.nodes[frame.nodes.length - 1];
-
-        let targetFrame: typeof diag.frames[0] | undefined;
-        if (frame.next_frame_target) {
-          targetFrame = diag.frames.find((f) => f.frame_id === frame.next_frame_target);
-        } else if (idx < diag.frames.length - 1) {
-          targetFrame = diag.frames[idx + 1];
-        }
-
-        if (targetFrame && targetFrame.nodes.length > 0) {
-          const firstNodeInTargetFrame = targetFrame.nodes[0];
-          rawEdges.push({
-            id: `macro_${frame.frame_id}_to_${targetFrame.frame_id}`,
-            fromInstanceId: lastNodeInCurrentFrame.instance_id,
-            toInstanceId: firstNodeInTargetFrame.instance_id,
-            label: undefined,
-            flowType: 'solid',
-            isMacro: true,
-          });
-        }
-      });
+      }
 
       const seenRouteKeys = new Set<string>();
       const uniqueEdges = rawEdges.filter((e) => {
@@ -759,6 +776,18 @@ export class LayoutEngine {
         const route = routed.get(routeKey);
         if (!route) return;
         const routeOverride = diagRoutes[routeKey];
+        const hasCustomLabelPos = edgeSpec.labelX !== undefined && edgeSpec.labelY !== undefined;
+        const customLabelX = hasCustomLabelPos
+          ? edgeSpec.labelX!
+          : routeOverride?.labelPosition?.x !== undefined
+          ? routeOverride.labelPosition.x
+          : route.labelX;
+        const customLabelY = hasCustomLabelPos
+          ? edgeSpec.labelY!
+          : routeOverride?.labelPosition?.y !== undefined
+          ? routeOverride.labelPosition.y
+          : route.labelY;
+
         layoutEdges.push({
           id: edgeSpec.id,
           fromInstanceId: edgeSpec.fromInstanceId,
@@ -769,8 +798,9 @@ export class LayoutEngine {
           pathD: pointsToPath(route.points),
           points: route.points,
           isManualRoute: route.isManual,
-          labelX: route.labelX,
-          labelY: route.labelY,
+          labelX: customLabelX,
+          labelY: customLabelY,
+          labelCustom: hasCustomLabelPos || Boolean(routeOverride?.labelPosition),
           label: edgeSpec.label,
           flowType: edgeSpec.flowType,
           color: edgeSpec.color,

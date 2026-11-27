@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
-import { LayoutEdge } from '../../services/LayoutEngine';
+import { LayoutEdge, LayoutNode } from '../../services/LayoutEngine';
 import { FlowType, BorderSide, NodeBorderAnchor } from '../../types/schema';
-import { Palette, Route, Trash2, Crosshair, ArrowRight } from 'lucide-react';
+import { Palette, Route, Trash2, Crosshair, ArrowRight, Sparkles } from 'lucide-react';
+import { inferDefaultBorderSides } from '../../services/EdgeRouter';
 import { useTranslation } from '../../i18n';
 
 interface EdgeEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   edge: LayoutEdge | null;
+  fromNode?: LayoutNode | null;
+  toNode?: LayoutNode | null;
   fromNodeTitle?: string;
   toNodeTitle?: string;
   onSave: (updates: {
@@ -22,6 +25,7 @@ interface EdgeEditorModalProps {
   onDelete?: () => void;
   onEditRoute?: () => void;
   onResetRoute?: () => void;
+  onResetLabelPosition?: () => void;
 }
 
 const PRESET_EDGE_COLORS = [
@@ -42,31 +46,45 @@ const BORDER_SIDES: { side: BorderSide; label: string }[] = [
   { side: 'bottom', label: 'Phía dưới' },
 ];
 
+const SIDE_NAMES: Record<BorderSide, string> = {
+  right: 'Bên phải',
+  left: 'Bên trái',
+  top: 'Phía trên',
+  bottom: 'Phía dưới',
+};
+
 export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
   isOpen,
   onClose,
   edge,
+  fromNode,
+  toNode,
   fromNodeTitle = 'Node nguồn',
   toNodeTitle = 'Node đích',
   onSave,
   onDelete,
   onEditRoute,
   onResetRoute,
+  onResetLabelPosition,
 }) => {
   const [label, setLabel] = useState('');
   const [flowType, setFlowType] = useState<FlowType>('solid');
   const [color, setColor] = useState('#64748B');
-  const [sourceSide, setSourceSide] = useState<BorderSide>('right');
-  const [targetSide, setTargetSide] = useState<BorderSide>('left');
+  const [sourceSide, setSourceSide] = useState<BorderSide | 'auto'>('auto');
+  const [targetSide, setTargetSide] = useState<BorderSide | 'auto'>('auto');
   const { t } = useTranslation();
+
+  const inferred = fromNode && toNode
+    ? inferDefaultBorderSides(fromNode, toNode)
+    : { sourceSide: 'right' as BorderSide, targetSide: 'left' as BorderSide };
 
   useEffect(() => {
     if (edge) {
       setLabel(edge.label || '');
       setFlowType(edge.flowType || 'solid');
       setColor(edge.color || (edge.isMacro ? '#6366F1' : '#64748B'));
-      setSourceSide(edge.sourceAnchor?.side || 'right');
-      setTargetSide(edge.targetAnchor?.side || 'left');
+      setSourceSide(edge.sourceAnchor?.side || 'auto');
+      setTargetSide(edge.targetAnchor?.side || 'auto');
     }
   }, [edge, isOpen]);
 
@@ -78,8 +96,8 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
       message_label: label.trim(),
       flow_type: flowType,
       color,
-      source_anchor: { side: sourceSide, ratio: 0.5 },
-      target_anchor: { side: targetSide, ratio: 0.5 },
+      source_anchor: sourceSide === 'auto' ? undefined : { side: sourceSide, ratio: 0.5 },
+      target_anchor: targetSide === 'auto' ? undefined : { side: targetSide, ratio: 0.5 },
     });
     onClose();
   };
@@ -141,6 +159,18 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               <p className="font-medium text-gray-600 dark:text-slate-400 mb-1.5 truncate" title={`Node nguồn: ${fromNodeTitle}`}>
                 Đầu ra: <span className="font-semibold text-blue-600 dark:text-blue-400">{fromNodeTitle}</span>
               </p>
+              <button
+                type="button"
+                onClick={() => setSourceSide('auto')}
+                className={`w-full mb-1.5 py-1.5 px-2 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center gap-1 ${
+                  sourceSide === 'auto'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold shadow-xs'
+                    : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-800'
+                }`}
+              >
+                <Sparkles size={11} className={sourceSide === 'auto' ? 'text-blue-500' : 'text-gray-400'} />
+                Tự động ({SIDE_NAMES[inferred.sourceSide]})
+              </button>
               <div className="grid grid-cols-2 gap-1.5">
                 {BORDER_SIDES.map((b) => (
                   <button
@@ -164,6 +194,18 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
               <p className="font-medium text-gray-600 dark:text-slate-400 mb-1.5 truncate" title={`Node đích: ${toNodeTitle}`}>
                 Đầu vào: <span className="font-semibold text-red-600 dark:text-red-400">{toNodeTitle}</span>
               </p>
+              <button
+                type="button"
+                onClick={() => setTargetSide('auto')}
+                className={`w-full mb-1.5 py-1.5 px-2 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center gap-1 ${
+                  targetSide === 'auto'
+                    ? 'border-red-500 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 font-semibold shadow-xs'
+                    : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-800'
+                }`}
+              >
+                <Sparkles size={11} className={targetSide === 'auto' ? 'text-red-500' : 'text-gray-400'} />
+                Tự động ({SIDE_NAMES[inferred.targetSide]})
+              </button>
               <div className="grid grid-cols-2 gap-1.5">
                 {BORDER_SIDES.map((b) => (
                   <button
@@ -296,6 +338,23 @@ export const EdgeEditorModal: React.FC<EdgeEditorModalProps> = ({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Reset custom label position if dragged */}
+        {edge.labelCustom && onResetLabelPosition && (
+          <div className="flex items-center justify-between bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-lg px-3 py-2 text-xs">
+            <span className="text-gray-600 dark:text-slate-300">Vị trí ô chữ đã được kéo tùy chỉnh</span>
+            <button
+              type="button"
+              onClick={() => {
+                onResetLabelPosition();
+                onClose();
+              }}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+            >
+              Đặt lại vị trí mặc định
+            </button>
           </div>
         )}
 

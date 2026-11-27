@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 export const DEFAULT_WS_PORT = 3333;
 
 export const DEFAULT_ROLE_COLORS = [

@@ -1,12 +1,14 @@
 import React, { useRef } from 'react';
 import { LayoutSwimlane } from '../../services/LayoutEngine';
 import { useTranslation } from '../../i18n';
+import { wrapSwimlaneTitle } from '../../utils/textUtils';
 
 interface SwimlaneRendererProps {
   swimlanes: LayoutSwimlane[];
   isDark?: boolean;
   onUpdateLaneSize?: (roleId: string, height: number) => void;
   onSelectDiagram?: (diagramId: string) => void;
+  onMoveRole?: (roleId: string, direction: 'up' | 'down') => void;
 }
 
 export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
@@ -14,6 +16,7 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
   isDark = false,
   onUpdateLaneSize,
   onSelectDiagram,
+  onMoveRole,
 }) => {
   const resizeRef = useRef<{ startY: number; startH: number } | null>(null);
   const { t } = useTranslation();
@@ -143,25 +146,13 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
         const CARD_HEIGHT = lane.height - 24;
         const CARD_TEXT_LEFT = CARD_LEFT + 26; // 10 + 6 (color strip) + 10 padding
 
-        // Wrap text if too long — increased max chars per line
-        const maxCharsPerLine = 24;
+        // Wrap swimlane title if exceeding 3 words or 16 characters
         const roleName = lane.roleName;
-        const lines: string[] = [];
-        if (roleName.length > maxCharsPerLine) {
-          // Split at word boundary
-          let lastSpaceIdx = roleName.lastIndexOf(' ', maxCharsPerLine);
-          if (lastSpaceIdx === -1 || lastSpaceIdx < maxCharsPerLine - 8) {
-            lastSpaceIdx = maxCharsPerLine;
-          }
-          lines.push(roleName.slice(0, lastSpaceIdx));
-          lines.push(roleName.slice(lastSpaceIdx + 1));
-        } else {
-          lines.push(roleName);
-        }
+        const lines = wrapSwimlaneTitle(roleName);
 
         // Center text vertically within the card
         const cardCenterY = lane.y + CARD_TOP + CARD_HEIGHT / 2;
-        const lineHeight = 14;
+        const lineHeight = 15;
         const totalTextHeight = lines.length * lineHeight;
         const firstLineY = cardCenterY - totalTextHeight / 2 + lineHeight / 2;
 
@@ -233,6 +224,57 @@ export const SwimlaneRenderer: React.FC<SwimlaneRendererProps> = ({
 
             {/* Tooltip title for full name on hover */}
             <title>{roleName}</title>
+
+            {/* Reorder Swimlane Up / Down buttons */}
+            {onMoveRole && (
+              <g className="cursor-pointer">
+                {/* Move Up Button */}
+                <g
+                  className={idx === 0 ? 'opacity-20 pointer-events-none' : 'hover:opacity-100 opacity-60 transition-opacity cursor-pointer'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (idx > 0) onMoveRole(lane.roleId, 'up');
+                  }}
+                >
+                  <rect
+                    x={CARD_LEFT + CARD_WIDTH - 24}
+                    y={lane.y + CARD_TOP + CARD_HEIGHT / 2 - 20}
+                    width={18}
+                    height={16}
+                    rx={3}
+                    fill={isDark ? '#334155' : '#E2E8F0'}
+                  />
+                  <path
+                    d={`M ${CARD_LEFT + CARD_WIDTH - 15} ${lane.y + CARD_TOP + CARD_HEIGHT / 2 - 16} L ${CARD_LEFT + CARD_WIDTH - 19} ${lane.y + CARD_TOP + CARD_HEIGHT / 2 - 9} L ${CARD_LEFT + CARD_WIDTH - 11} ${lane.y + CARD_TOP + CARD_HEIGHT / 2 - 9} Z`}
+                    fill={isDark ? '#F1F5F9' : '#475569'}
+                  />
+                  <title>{t('palette.moveRoleUp') || 'Di chuyển swimlane lên'}</title>
+                </g>
+
+                {/* Move Down Button */}
+                <g
+                  className={idx === swimlanes.length - 1 ? 'opacity-20 pointer-events-none' : 'hover:opacity-100 opacity-60 transition-opacity cursor-pointer'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (idx < swimlanes.length - 1) onMoveRole(lane.roleId, 'down');
+                  }}
+                >
+                  <rect
+                    x={CARD_LEFT + CARD_WIDTH - 24}
+                    y={lane.y + CARD_TOP + CARD_HEIGHT / 2 + 4}
+                    width={18}
+                    height={16}
+                    rx={3}
+                    fill={isDark ? '#334155' : '#E2E8F0'}
+                  />
+                  <path
+                    d={`M ${CARD_LEFT + CARD_WIDTH - 15} ${lane.y + CARD_TOP + CARD_HEIGHT / 2 + 16} L ${CARD_LEFT + CARD_WIDTH - 19} ${lane.y + CARD_TOP + CARD_HEIGHT / 2 + 9} L ${CARD_LEFT + CARD_WIDTH - 11} ${lane.y + CARD_TOP + CARD_HEIGHT / 2 + 9} Z`}
+                    fill={isDark ? '#F1F5F9' : '#475569'}
+                  />
+                  <title>{t('palette.moveRoleDown') || 'Di chuyển swimlane xuống'}</title>
+                </g>
+              </g>
+            )}
 
             {/* Lane Resize Handle (bottom-right) */}
             {onUpdateLaneSize && (

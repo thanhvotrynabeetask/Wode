@@ -1,7 +1,7 @@
 {
   "name": "wode",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Deterministic local-first swimlane workflow builder with real-time MCP connector for AI agents",
   "homepage": "https://wode-beta.vercel.app",
   "repository": {

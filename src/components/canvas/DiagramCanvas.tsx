@@ -19,6 +19,9 @@ import {
   getNodeSidePort,
   inferDefaultBorderSides,
   buildOrthogonalConnector,
+  simplifyPolyline,
+  straightenAlignedPolyline,
+  STRAIGHT_ALIGN_TOLERANCE,
 } from '../../services/EdgeRouter';
 import { BorderSide, NodeBorderAnchor } from '../../types/schema';
 import { CanvasSubToolbar } from './CanvasSubToolbar';
@@ -41,6 +44,17 @@ interface MultiDragState {
   primaryNode: LayoutNode;
 }
 
+interface LabelDragState {
+  edge: LayoutEdge;
+  startClientX: number;
+  startClientY: number;
+  startLabelX: number;
+  startLabelY: number;
+  currentLabelX: number;
+  currentLabelY: number;
+  hasMoved: boolean;
+}
+
 export const DiagramCanvas: React.FC = () => {
   const schema = useProjectStore((s) => s.schema);
   const { theme, enableDarkGlow } = useSettingsStore();
@@ -51,8 +65,11 @@ export const DiagramCanvas: React.FC = () => {
     moveNodeToFrame,
     updateNodeInstance,
     updateRole,
+    moveRole,
     updateEdge,
     updateStandaloneEdge,
+    updateEdgeConfig,
+    removeEdge,
     setEdgeRoute,
     clearAllEdgeRoutes,
     setActiveDiagram,
@@ -61,6 +78,7 @@ export const DiagramCanvas: React.FC = () => {
 
   const {
     interactionMode,
+    setInteractionMode,
     zoom,
     panX,
     panY,
@@ -92,7 +110,19 @@ export const DiagramCanvas: React.FC = () => {
   const [multiDragState, setMultiDragState] = useState<MultiDragState | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Marquee Area Selection State (Rectangle selection zone in Select Mode)
+  const [marqueeState, setMarqueeState] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    initialSelectedIds: string[];
+    isAppend: boolean;
+  } | null>(null);
+
   const [editingEdge, setEditingEdge] = useState<LayoutEdge | null>(null);
+  const [labelDragState, setLabelDragState] = useState<LabelDragState | null>(null);
+  const justDraggedLabelRef = useRef(false);
 
   const [routeEditKey, setRouteEditKey] = useState<string | null>(null);
   const [routeDrag, setRouteDrag] = useState<{
@@ -195,9 +225,43 @@ export const DiagramCanvas: React.FC = () => {
     [layout.canvasWidth, layout.canvasHeight]
   );
 
-  // Handle Pan via canvas background mouse drag (empty space always allows dragging to pan)
+  // Handle Canvas background mouse drag:
+  // - In Box Select mode (Quét chọn vùng - nút cạnh Select All):
+  //   Dragging draws the marquee selection rectangle to pick multiple nodes.
+  // - In Pan mode (Ctrl+A), normal Select mode (Ctrl+Q), or Middle click:
+  //   Dragging on empty canvas pans the view smoothly, without accidentally opening a selection box!
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
+
+    // In Box Select Mode: Left click on canvas starts Rectangle Area Selection
+    if (interactionMode === 'boxSelect' && e.button === 0) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const canvasX = (e.clientX - rect.left - panX) / zoom;
+      const canvasY = (e.clientY - rect.top - panY) / zoom;
+
+      const isAppend = e.shiftKey || e.ctrlKey || e.metaKey;
+      const initialSelected = isAppend ? [...selection.selectedInstanceIds] : [];
+
+      if (!isAppend) {
+        clearSelection();
+        lastAnchorIdRef.current = null;
+      }
+
+      setMarqueeState({
+        startX: canvasX,
+        startY: canvasY,
+        currentX: canvasX,
+        currentY: canvasY,
+        initialSelectedIds: initialSelected,
+        isAppend,
+      });
+      return;
+    }
+
+    // Default for empty canvas (Pan mode, or Select mode dragging on empty space):
+    // Dragging pans canvas view smoothly; clicking deselects (if not shiftKey)
     setIsPanning(true);
     panStartRef.current = {
       x: e.clientX,
@@ -215,8 +279,6 @@ export const DiagramCanvas: React.FC = () => {
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
       if (routeDrag) {
-        const snapToGrid = (v: number) => Math.round(v / 10) * 10;
-
         if (routeDrag.dragType === 'start') {
           const rect = containerRef.current?.getBoundingClientRect();
           if (!rect) return;
@@ -304,27 +366,106 @@ export const DiagramCanvas: React.FC = () => {
           const b = raw[segmentIndex + 1];
           if (!a || !b) return;
 
-          if (Math.abs(a.y - b.y) < 0.01) {
-            const y = snapToGrid(a.y + (e.clientY - routeDrag.startClientY) / zoom);
-            a.y = y;
-            b.y = y;
+          const start = raw[0];
+          const end = raw[raw.length - 1];
+          const isHorizontal = Math.abs(a.y - b.y) < 0.01;
+
+          if (isHorizontal) {
+            const deltaY = (e.clientY - routeDrag.startClientY) / zoom;
+            const rawY = basePoints[segmentIndex].y + deltaY;
+            const alignY = Math.round((start.y + end.y) / 2);
+            const isEndpointsAligned = Math.abs(start.y - end.y) <= STRAIGHT_ALIGN_TOLERANCE;
+
+            let finalY: number;
+            // Magnetic snap to straight alignment line if within 15px
+            if (isEndpointsAligned && Math.abs(rawY - alignY) <= 15) {
+              finalY = alignY;
+            } else if (Math.abs(rawY - start.y) <= 8) {
+              finalY = start.y;
+            } else if (Math.abs(rawY - end.y) <= 8) {
+              finalY = end.y;
+            } else {
+              finalY = Math.round(rawY);
+            }
+
+            a.y = finalY;
+            b.y = finalY;
           } else {
-            const x = snapToGrid(a.x + (e.clientX - routeDrag.startClientX) / zoom);
-            a.x = x;
-            b.x = x;
+            const deltaX = (e.clientX - routeDrag.startClientX) / zoom;
+            const rawX = basePoints[segmentIndex].x + deltaX;
+            const alignX = Math.round((start.x + end.x) / 2);
+            const isEndpointsAligned = Math.abs(start.x - end.x) <= STRAIGHT_ALIGN_TOLERANCE;
+
+            let finalX: number;
+            // Magnetic snap to straight alignment line if within 15px
+            if (isEndpointsAligned && Math.abs(rawX - alignX) <= 15) {
+              finalX = alignX;
+            } else if (Math.abs(rawX - start.x) <= 8) {
+              finalX = start.x;
+            } else if (Math.abs(rawX - end.x) <= 8) {
+              finalX = end.x;
+            } else {
+              finalX = Math.round(rawX);
+            }
+
+            a.x = finalX;
+            b.x = finalX;
           }
-          const waypoints = extractWaypoints(raw);
+
+          const simplified = simplifyPolyline(raw);
+          const straightened = straightenAlignedPolyline(simplified, STRAIGHT_ALIGN_TOLERANCE);
+          const waypoints = extractWaypoints(straightened);
+
           const startSide = routeDrag.sourceAnchor?.side || 'right';
           const targetSide = routeDrag.targetAnchor?.side || 'left';
-          const normalized =
-            waypoints.length > 0
-              ? buildManualPoints(raw[0], raw[raw.length - 1], waypoints, startSide, targetSide)
-              : null;
+
+          let preview: Point[];
+          if (straightened.length === 2) {
+            preview = straightened;
+          } else if (waypoints.length > 0) {
+            const manual = buildManualPoints(start, end, waypoints, startSide, targetSide);
+            preview = manual || straightened;
+          } else {
+            preview = buildOrthogonalConnector(start, end, startSide, targetSide);
+          }
+
           setRouteDrag((prev) =>
-            prev ? { ...prev, rawPoints: raw, previewPoints: normalized || raw, moved: true } : null
+            prev ? { ...prev, rawPoints: straightened, previewPoints: preview, moved: true } : null
           );
           return;
         }
+      }
+      if (marqueeState) {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const canvasX = (e.clientX - rect.left - panX) / zoom;
+        const canvasY = (e.clientY - rect.top - panY) / zoom;
+
+        const boxLeft = Math.min(marqueeState.startX, canvasX);
+        const boxRight = Math.max(marqueeState.startX, canvasX);
+        const boxTop = Math.min(marqueeState.startY, canvasY);
+        const boxBottom = Math.max(marqueeState.startY, canvasY);
+
+        // Find all nodes whose bounding box intersects the marquee rectangle
+        const hitIds = layout.nodes
+          .filter((n) => {
+            return !(
+              n.x + n.width < boxLeft ||
+              n.x > boxRight ||
+              n.y + n.height < boxTop ||
+              n.y > boxBottom
+            );
+          })
+          .map((n) => n.instanceId);
+
+        const newSelected = marqueeState.isAppend
+          ? Array.from(new Set([...marqueeState.initialSelectedIds, ...hitIds]))
+          : hitIds;
+
+        setSelectedInstances(newSelected);
+        setMarqueeState((prev) => (prev ? { ...prev, currentX: canvasX, currentY: canvasY } : null));
+        return;
       }
       if (multiDragState) {
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -332,19 +473,8 @@ export const DiagramCanvas: React.FC = () => {
         rafRef.current = requestAnimationFrame(() => {
           const rawDx = (e.clientX - multiDragState.startClientX) / zoom;
           const rawDy = (e.clientY - multiDragState.startClientY) / zoom;
+          const isMulti = multiDragState.items.length > 1;
 
-          // Find primary node and its proposed position
-          const primaryItem =
-            multiDragState.items.find((i) => i.node.instanceId === multiDragState.primaryNode.instanceId) ||
-            multiDragState.items[0];
-          const primaryNode = primaryItem.node;
-          const rawProposedPrimaryX = Math.max(160, Math.round(primaryItem.nodeStartX + rawDx));
-
-          // Nodes not being dragged (candidates for auto-alignment)
-          const draggingIds = new Set(multiDragState.items.map((i) => i.node.instanceId));
-          const candidateNodes = layout.nodes.filter((n) => !draggingIds.has(n.instanceId));
-
-          // Calculate horizontal alignment snap against other nodes above/below across any swimlane
           let effectiveDx = rawDx;
           let activeGuide: {
             type: 'vertical' | 'horizontal';
@@ -354,79 +484,97 @@ export const DiagramCanvas: React.FC = () => {
             alignedNodeTitle?: string;
           } | null = null;
 
-          const SNAP_THRESHOLD = 15;
-          let bestSnapScore = Infinity;
-          let bestSnappedX = rawProposedPrimaryX;
+          if (!isMulti) {
+            // SINGLE NODE: Magnetic Snap to other candidate nodes
+            const primaryItem = multiDragState.items[0];
+            const primaryNode = primaryItem.node;
+            const rawProposedPrimaryX = Math.max(160, Math.round(primaryItem.nodeStartX + rawDx));
 
-          const primaryCenterX = rawProposedPrimaryX + primaryNode.width / 2;
-          const primaryLeftX = rawProposedPrimaryX;
-          const primaryRightX = rawProposedPrimaryX + primaryNode.width;
+            // Nodes not being dragged (candidates for auto-alignment)
+            const candidateNodes = layout.nodes.filter((n) => n.instanceId !== primaryNode.instanceId);
 
-          candidateNodes.forEach((other) => {
-            const otherCenterX = other.x + other.width / 2;
-            const otherLeftX = other.x;
-            const otherRightX = other.x + other.width;
+            const SNAP_THRESHOLD = 15;
+            let bestSnapScore = Infinity;
+            let bestSnappedX = rawProposedPrimaryX;
 
-            // 1. Center-to-Center snap (highest priority: produces 100% straight vertical flows)
-            const diffCenter = Math.abs(primaryCenterX - otherCenterX);
-            if (diffCenter <= SNAP_THRESHOLD) {
-              const score = diffCenter * 0.75;
-              if (score < bestSnapScore) {
-                bestSnapScore = score;
-                bestSnappedX = otherCenterX - primaryNode.width / 2;
-                const minY = Math.min(primaryNode.y, other.y) - 14;
-                const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
-                activeGuide = {
-                  type: 'vertical',
-                  pos: otherCenterX,
-                  start: minY,
-                  end: maxY,
-                  alignedNodeTitle: other.title,
-                };
+            const primaryCenterX = rawProposedPrimaryX + primaryNode.width / 2;
+            const primaryLeftX = rawProposedPrimaryX;
+            const primaryRightX = rawProposedPrimaryX + primaryNode.width;
+
+            candidateNodes.forEach((other) => {
+              const otherCenterX = other.x + other.width / 2;
+              const otherLeftX = other.x;
+              const otherRightX = other.x + other.width;
+
+              // 1. Center-to-Center snap (highest priority: produces 100% straight vertical flows)
+              const diffCenter = Math.abs(primaryCenterX - otherCenterX);
+              if (diffCenter <= SNAP_THRESHOLD) {
+                const score = diffCenter * 0.75;
+                if (score < bestSnapScore) {
+                  bestSnapScore = score;
+                  bestSnappedX = otherCenterX - primaryNode.width / 2;
+                  const minY = Math.min(primaryNode.y, other.y) - 14;
+                  const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
+                  activeGuide = {
+                    type: 'vertical',
+                    pos: otherCenterX,
+                    start: minY,
+                    end: maxY,
+                    alignedNodeTitle: other.title,
+                  };
+                }
               }
-            }
 
-            // 2. Left-to-Left snap
-            const diffLeft = Math.abs(primaryLeftX - otherLeftX);
-            if (diffLeft <= SNAP_THRESHOLD) {
-              const score = diffLeft;
-              if (score < bestSnapScore) {
-                bestSnapScore = score;
-                bestSnappedX = otherLeftX;
-                const minY = Math.min(primaryNode.y, other.y) - 14;
-                const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
-                activeGuide = {
-                  type: 'vertical',
-                  pos: otherLeftX,
-                  start: minY,
-                  end: maxY,
-                  alignedNodeTitle: other.title,
-                };
+              // 2. Left-to-Left snap
+              const diffLeft = Math.abs(primaryLeftX - otherLeftX);
+              if (diffLeft <= SNAP_THRESHOLD) {
+                const score = diffLeft;
+                if (score < bestSnapScore) {
+                  bestSnapScore = score;
+                  bestSnappedX = otherLeftX;
+                  const minY = Math.min(primaryNode.y, other.y) - 14;
+                  const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
+                  activeGuide = {
+                    type: 'vertical',
+                    pos: otherLeftX,
+                    start: minY,
+                    end: maxY,
+                    alignedNodeTitle: other.title,
+                  };
+                }
               }
-            }
 
-            // 3. Right-to-Right snap
-            const diffRight = Math.abs(primaryRightX - otherRightX);
-            if (diffRight <= SNAP_THRESHOLD) {
-              const score = diffRight;
-              if (score < bestSnapScore) {
-                bestSnapScore = score;
-                bestSnappedX = otherRightX - primaryNode.width;
-                const minY = Math.min(primaryNode.y, other.y) - 14;
-                const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
-                activeGuide = {
-                  type: 'vertical',
-                  pos: otherRightX,
-                  start: minY,
-                  end: maxY,
-                  alignedNodeTitle: other.title,
-                };
+              // 3. Right-to-Right snap
+              const diffRight = Math.abs(primaryRightX - otherRightX);
+              if (diffRight <= SNAP_THRESHOLD) {
+                const score = diffRight;
+                if (score < bestSnapScore) {
+                  bestSnapScore = score;
+                  bestSnappedX = otherRightX - primaryNode.width;
+                  const minY = Math.min(primaryNode.y, other.y) - 14;
+                  const maxY = Math.max(primaryNode.y + primaryNode.height, other.y + other.height) + 14;
+                  activeGuide = {
+                    type: 'vertical',
+                    pos: otherRightX,
+                    start: minY,
+                    end: maxY,
+                    alignedNodeTitle: other.title,
+                  };
+                }
               }
-            }
-          });
+            });
 
-          if (bestSnapScore < Infinity) {
-            effectiveDx = bestSnappedX - primaryItem.nodeStartX;
+            if (bestSnapScore < Infinity) {
+              effectiveDx = bestSnappedX - primaryItem.nodeStartX;
+            } else {
+              effectiveDx = rawProposedPrimaryX - primaryItem.nodeStartX;
+            }
+          } else {
+            // MULTI-SELECTION DRAG:
+            // Calculate minimum startX across all items to guarantee NO item crosses margin (< 160)
+            const minStartX = Math.min(...multiDragState.items.map((i) => i.nodeStartX));
+            // Uniform clamp: every node shifts by EXACT SAME effectiveDx
+            effectiveDx = Math.max(160 - minStartX, rawDx);
           }
 
           setSnapGuide(activeGuide);
@@ -435,36 +583,42 @@ export const DiagramCanvas: React.FC = () => {
 
           multiDragState.items.forEach(({ node, nodeStartX, nodeStartY }) => {
             const isSpecial = node.nodeKind === 'storage' || node.nodeKind === 'mediator';
-            const newX = Math.max(160, Math.round(nodeStartX + effectiveDx));
+            // Uniformly shift all nodes by effectiveDx to keep exact order and relative spacing!
+            const newX = Math.round(nodeStartX + effectiveDx);
 
             let newY = nodeStartY;
             let assignedRoleId: string | undefined = undefined;
 
-            const diagSwimlanes = node.diagramId
-              ? layout.swimlanes.filter((l) => l.diagramId === node.diagramId)
-              : layout.swimlanes;
+            if (!isMulti) {
+              const diagSwimlanes = node.diagramId
+                ? layout.swimlanes.filter((l) => l.diagramId === node.diagramId)
+                : layout.swimlanes;
 
-            if (isSpecial && diagSwimlanes.length > 0) {
-              // Magnet: follow the lane under the cursor and sit centered in it
-              const centerNodeY = nodeStartY + rawDy + node.height / 2;
-              const targetLane =
-                diagSwimlanes.find(
-                  (lane) => centerNodeY >= lane.y && centerNodeY <= lane.y + lane.height
-                ) ||
-                diagSwimlanes.reduce((nearest, lane) => {
-                  const distance = (l: typeof lane) =>
-                    Math.min(Math.abs(centerNodeY - l.y), Math.abs(centerNodeY - (l.y + l.height)));
-                  return distance(lane) < distance(nearest) ? lane : nearest;
-                });
-              newY = targetLane.y + (targetLane.height - node.height) / 2;
-              assignedRoleId = targetLane.roleId;
-            } else {
-              const lane = diagSwimlanes.find((l) => l.roleId === node.roleId) || layout.swimlanes.find((l) => l.roleId === node.roleId);
-              if (lane) {
-                const minY = lane.y + 6;
-                const maxY = lane.y + lane.height - node.height - 6;
-                newY = Math.max(minY, Math.min(maxY, nodeStartY + rawDy));
+              if (isSpecial && diagSwimlanes.length > 0) {
+                // Magnet: follow the lane under the cursor and sit centered in it
+                const centerNodeY = nodeStartY + rawDy + node.height / 2;
+                const targetLane =
+                  diagSwimlanes.find(
+                    (lane) => centerNodeY >= lane.y && centerNodeY <= lane.y + lane.height
+                  ) ||
+                  diagSwimlanes.reduce((nearest, lane) => {
+                    const distance = (l: typeof lane) =>
+                      Math.min(Math.abs(centerNodeY - l.y), Math.abs(centerNodeY - (l.y + l.height)));
+                    return distance(lane) < distance(nearest) ? lane : nearest;
+                  });
+                newY = targetLane.y + (targetLane.height - node.height) / 2;
+                assignedRoleId = targetLane.roleId;
+              } else {
+                const lane = diagSwimlanes.find((l) => l.roleId === node.roleId) || layout.swimlanes.find((l) => l.roleId === node.roleId);
+                if (lane) {
+                  const minY = lane.y + 6;
+                  const maxY = lane.y + lane.height - node.height - 6;
+                  newY = Math.max(minY, Math.min(maxY, nodeStartY + rawDy));
+                }
               }
+            } else {
+              // When moving multiple nodes, preserve each node's exact Y position inside its lane!
+              newY = nodeStartY;
             }
 
             updatedOffsets.set(node.instanceId, { x: newX, y: newY, assignedRoleId });
@@ -472,6 +626,21 @@ export const DiagramCanvas: React.FC = () => {
 
           setMultiDragState((prev) => (prev ? { ...prev, currentOffsets: updatedOffsets } : null));
         });
+      } else if (labelDragState) {
+        const dx = (e.clientX - labelDragState.startClientX) / zoom;
+        const dy = (e.clientY - labelDragState.startClientY) / zoom;
+        const dist = Math.hypot(e.clientX - labelDragState.startClientX, e.clientY - labelDragState.startClientY);
+        const hasMoved = labelDragState.hasMoved || dist > 4;
+        setLabelDragState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentLabelX: Math.round(prev.startLabelX + dx),
+                currentLabelY: Math.round(prev.startLabelY + dy),
+                hasMoved,
+              }
+            : null
+        );
       } else if (isPanning) {
         const dx = e.clientX - panStartRef.current.x;
         const dy = e.clientY - panStartRef.current.y;
@@ -479,7 +648,7 @@ export const DiagramCanvas: React.FC = () => {
         setPan(clamped.x, clamped.y);
       }
     },
-    [isPanning, multiDragState, routeDrag, zoom, setPan, clampPan, layout.swimlanes]
+    [isPanning, multiDragState, routeDrag, labelDragState, zoom, setPan, clampPan, layout.swimlanes]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -493,7 +662,7 @@ export const DiagramCanvas: React.FC = () => {
           : extractWaypoints(routeDrag.previewPoints);
 
         setEdgeRoute(routeDrag.edge.routeKey, {
-          waypoints: waypoints && waypoints.length > 0 ? waypoints : undefined,
+          waypoints: waypoints && waypoints.length > 0 ? waypoints : [],
           sourceAnchor: routeDrag.sourceAnchor,
           targetAnchor: routeDrag.targetAnchor,
         });
@@ -523,60 +692,95 @@ export const DiagramCanvas: React.FC = () => {
       return;
     }
 
+    if (marqueeState) {
+      const dist = Math.hypot(marqueeState.currentX - marqueeState.startX, marqueeState.currentY - marqueeState.startY);
+      if (dist > 5) {
+        const count = selection.selectedInstanceIds.length;
+        if (count > 0) {
+          addToast('info', t('canvas.selectedCount', { count }) || `Đã chọn ${count} nhiệm vụ`);
+        }
+      }
+      setMarqueeState(null);
+      // Automatically return to select mode so user can immediately move/edit the selected items!
+      if (interactionMode === 'boxSelect') {
+        setInteractionMode('select');
+      }
+    }
+
     if (multiDragState) {
-      const primaryOffset = multiDragState.currentOffsets.get(multiDragState.primaryNode.instanceId);
-      const primaryFinalX = primaryOffset ? primaryOffset.x : multiDragState.primaryNode.x;
+      if (multiDragState.items.length === 1) {
+        const primaryItem = multiDragState.items[0];
+        const primaryOffset = multiDragState.currentOffsets.get(primaryItem.node.instanceId);
+        const primaryFinalX = primaryOffset ? primaryOffset.x : primaryItem.node.x;
 
-      const targetFrame = layout.frames.find(
-        (f) =>
-          f.diagramId === multiDragState.primaryNode.diagramId &&
-          primaryFinalX + multiDragState.primaryNode.width / 2 >= f.x &&
-          primaryFinalX + multiDragState.primaryNode.width / 2 <= f.x + f.width
-      );
-
-      if (targetFrame && targetFrame.frameId !== multiDragState.primaryNode.frameId) {
-        const primaryCenterX = primaryFinalX + multiDragState.primaryNode.width / 2;
-        const insertIndex = layout.nodes.filter(
-          (n) => n.frameId === targetFrame.frameId && n.x + n.width / 2 < primaryCenterX
-        ).length;
-        // Seamless transfer across frames without any annoying confirm guardrail dialog
-        moveNodeToFrame(
-          multiDragState.primaryNode.frameId,
-          targetFrame.frameId,
-          multiDragState.primaryNode.instanceId,
-          primaryFinalX,
-          primaryOffset?.assignedRoleId,
-          insertIndex
+        const targetFrame = layout.frames.find(
+          (f) =>
+            f.diagramId === primaryItem.node.diagramId &&
+            primaryFinalX + primaryItem.node.width / 2 >= f.x &&
+            primaryFinalX + primaryItem.node.width / 2 <= f.x + f.width
         );
-      } else {
-        if (multiDragState.items.length === 1) {
-          const item = multiDragState.items[0];
-          const pos = multiDragState.currentOffsets.get(item.node.instanceId);
-          if (pos) {
+
+        if (targetFrame && targetFrame.frameId !== primaryItem.node.frameId) {
+          const primaryCenterX = primaryFinalX + primaryItem.node.width / 2;
+          const insertIndex = layout.nodes.filter(
+            (n) => n.frameId === targetFrame.frameId && n.x + n.width / 2 < primaryCenterX
+          ).length;
+          // Seamless transfer across frames without any annoying confirm guardrail dialog
+          moveNodeToFrame(
+            primaryItem.node.frameId,
+            targetFrame.frameId,
+            primaryItem.node.instanceId,
+            primaryFinalX,
+            primaryOffset?.assignedRoleId,
+            insertIndex
+          );
+        } else {
+          if (primaryOffset) {
             updateNodePosition(
-              item.node.frameId,
-              item.node.instanceId,
-              pos.x,
-              pos.y,
-              pos.assignedRoleId
+              primaryItem.node.frameId,
+              primaryItem.node.instanceId,
+              primaryOffset.x,
+              primaryOffset.y,
+              primaryOffset.assignedRoleId
             );
           }
-        } else {
-          const updates = multiDragState.items.map((item) => {
-            const pos = multiDragState.currentOffsets.get(item.node.instanceId);
-            return {
-              frameId: item.node.frameId,
-              instanceId: item.node.instanceId,
-              customX: pos ? pos.x : item.node.x,
-              customY: pos ? pos.y : item.node.y,
-              assignedRoleId: pos?.assignedRoleId,
-            };
-          });
-          updateMultipleNodesPositions(updates);
         }
+      } else {
+        // MULTI-NODE DRAG:
+        // Group movement: Preserve all items and frames!
+        const updates = multiDragState.items.map((item) => {
+          const pos = multiDragState.currentOffsets.get(item.node.instanceId);
+          return {
+            frameId: item.node.frameId,
+            instanceId: item.node.instanceId,
+            customX: pos ? pos.x : item.node.x,
+            customY: pos ? pos.y : item.node.y,
+            assignedRoleId: pos?.assignedRoleId,
+          };
+        });
+        updateMultipleNodesPositions(updates);
       }
 
       setMultiDragState(null);
+    }
+
+    if (labelDragState) {
+      if (labelDragState.hasMoved) {
+        justDraggedLabelRef.current = true;
+        setTimeout(() => {
+          justDraggedLabelRef.current = false;
+        }, 150);
+
+        updateEdgeConfig(
+          labelDragState.edge.fromInstanceId,
+          labelDragState.edge.toInstanceId,
+          {
+            label_x: labelDragState.currentLabelX,
+            label_y: labelDragState.currentLabelY,
+          }
+        );
+      }
+      setLabelDragState(null);
     }
 
     setSnapGuide(null);
@@ -584,15 +788,19 @@ export const DiagramCanvas: React.FC = () => {
   }, [
     multiDragState,
     routeDrag,
+    labelDragState,
     layout.frames,
     layout.nodes,
+    schema.active_diagram_id,
     updateNodePosition,
     updateMultipleNodesPositions,
+    updateEdgeConfig,
     setEdgeRoute,
+    setActiveDiagram,
   ]);
 
   useEffect(() => {
-    if (isPanning || multiDragState || routeDrag) {
+    if (isPanning || multiDragState || routeDrag || labelDragState || marqueeState) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       return () => {
@@ -600,7 +808,7 @@ export const DiagramCanvas: React.FC = () => {
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isPanning, multiDragState, routeDrag, handleMouseMove, handleMouseUp]);
+  }, [isPanning, multiDragState, routeDrag, labelDragState, marqueeState, handleMouseMove, handleMouseUp]);
 
   useEffect(() => {
     if (!routeEditKey) return;
@@ -635,20 +843,34 @@ export const DiagramCanvas: React.FC = () => {
     let index = segmentIndex;
 
     if (handleType === 'segment' && segmentIndex === STRAIGHT_EDGE_HANDLE) {
-      // A straight edge has no bends yet: give it a Z shape whose middle run can be dragged.
+      // A straight edge has no bends yet: give it an orthogonal shape whose middle run can be dragged.
       const [start, end] = basePoints;
-      const snapToGrid = (v: number) => Math.round(v / 10) * 10;
-      const x1 = snapToGrid(start.x + (end.x - start.x) * 0.3);
-      const x2 = snapToGrid(start.x + (end.x - start.x) * 0.7);
-      basePoints = [
-        start,
-        { x: x1, y: start.y },
-        { x: x1, y: start.y },
-        { x: x2, y: start.y },
-        { x: x2, y: start.y },
-        end,
-      ];
-      index = 2;
+      const isVertical = Math.abs(start.x - end.x) <= Math.abs(start.y - end.y);
+      if (isVertical) {
+        const y1 = Math.round(start.y + (end.y - start.y) * 0.35);
+        const y2 = Math.round(start.y + (end.y - start.y) * 0.65);
+        basePoints = [
+          start,
+          { x: start.x, y: y1 },
+          { x: start.x, y: y1 },
+          { x: end.x, y: y2 },
+          { x: end.x, y: y2 },
+          end,
+        ];
+        index = 2;
+      } else {
+        const x1 = Math.round(start.x + (end.x - start.x) * 0.35);
+        const x2 = Math.round(start.x + (end.x - start.x) * 0.65);
+        basePoints = [
+          start,
+          { x: x1, y: start.y },
+          { x: x1, y: start.y },
+          { x: x2, y: end.y },
+          { x: x2, y: end.y },
+          end,
+        ];
+        index = 2;
+      }
     }
 
     setRouteDrag({
@@ -761,6 +983,10 @@ export const DiagramCanvas: React.FC = () => {
       return;
     }
 
+    if (interactionMode === 'boxSelect') {
+      setInteractionMode('select');
+    }
+
     if (clickedNode.diagramId && clickedNode.diagramId !== schema.active_diagram_id) {
       setActiveDiagram(clickedNode.diagramId);
     }
@@ -802,6 +1028,15 @@ export const DiagramCanvas: React.FC = () => {
 
   // Node Click Selection (Ctrl for toggle, Shift for flow range selection - Requirement 2)
   const handleNodeClick = (e: React.MouseEvent, instanceId: string, frameId: string, diagramId?: string) => {
+    // In Pan mode (Ctrl+A), canvas is purely for viewing/panning, do not alter selection on click
+    if (interactionMode === 'pan') {
+      return;
+    }
+
+    if (interactionMode === 'boxSelect') {
+      setInteractionMode('select');
+    }
+
     if (diagramId && diagramId !== schema.active_diagram_id) {
       setActiveDiagram(diagramId);
     }
@@ -883,6 +1118,20 @@ export const DiagramCanvas: React.FC = () => {
     );
   };
 
+  const handleStartLabelDrag = (e: React.MouseEvent, edge: LayoutEdge) => {
+    e.stopPropagation();
+    setLabelDragState({
+      edge,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startLabelX: edge.labelX,
+      startLabelY: edge.labelY,
+      currentLabelX: edge.labelX,
+      currentLabelY: edge.labelY,
+      hasMoved: false,
+    });
+  };
+
   const handleSaveEdge = (updates: {
     message_label: string;
     flow_type: any;
@@ -891,18 +1140,30 @@ export const DiagramCanvas: React.FC = () => {
     target_anchor?: NodeBorderAnchor;
   }) => {
     if (!editingEdge) return;
-    const targetFrameId = editingEdge.frameId || (schema.frames.length > 0 ? schema.frames[0]?.frame_id : '');
-    if (targetFrameId) {
-      updateEdge(targetFrameId, editingEdge.fromInstanceId, editingEdge.toInstanceId, updates);
-    } else {
-      updateStandaloneEdge(editingEdge.fromInstanceId, editingEdge.toInstanceId, updates);
-    }
-    if (updates.source_anchor || updates.target_anchor) {
+
+    // Check if anchor configuration actually changed
+    const currentSourceSide = editingEdge.sourceAnchor?.side || undefined;
+    const currentTargetSide = editingEdge.targetAnchor?.side || undefined;
+    const newSourceSide = updates.source_anchor?.side || undefined;
+    const newTargetSide = updates.target_anchor?.side || undefined;
+    const anchorsChanged = newSourceSide !== currentSourceSide || newTargetSide !== currentTargetSide;
+
+    const edgeUpdates: any = {
+      message_label: updates.message_label,
+      flow_type: updates.flow_type,
+      color: updates.color,
+    };
+
+    if (anchorsChanged) {
+      edgeUpdates.source_anchor = updates.source_anchor;
+      edgeUpdates.target_anchor = updates.target_anchor;
       setEdgeRoute(editingEdge.routeKey, {
-        sourceAnchor: updates.source_anchor,
-        targetAnchor: updates.target_anchor,
+        sourceAnchor: updates.source_anchor || null,
+        targetAnchor: updates.target_anchor || null,
       });
     }
+
+    updateEdgeConfig(editingEdge.fromInstanceId, editingEdge.toInstanceId, edgeUpdates);
     addToast('success', t('canvas.flowUpdated'));
     setEditingEdge(null);
   };
@@ -925,7 +1186,13 @@ export const DiagramCanvas: React.FC = () => {
         onMouseDown={handleMouseDown}
         onWheel={handleWheel}
         className={`relative flex-1 w-full h-full overflow-hidden select-none ${
-          isPanning ? 'cursor-grabbing select-none' : 'cursor-grab active:cursor-grabbing'
+          interactionMode === 'pan'
+            ? isPanning
+              ? 'cursor-grabbing select-none'
+              : 'cursor-grab active:cursor-grabbing'
+            : interactionMode === 'boxSelect' || marqueeState
+            ? 'cursor-crosshair'
+            : 'cursor-default'
         }`}
       >
         {/* Subtle Canvas Dot Grid Background */}
@@ -1077,6 +1344,10 @@ export const DiagramCanvas: React.FC = () => {
             isDark={isDark}
             onUpdateLaneSize={(roleId, height) => updateRole(roleId, { custom_height: height })}
             onSelectDiagram={(diagId) => setActiveDiagram(diagId)}
+            onMoveRole={(roleId, direction) => {
+              moveRole(roleId, direction);
+              addToast('info', t('palette.swimlaneMoved') || 'Đã thay đổi thứ tự swimlane');
+            }}
           />
 
           {/* Layer 2: Frame Overlays */}
@@ -1138,8 +1409,17 @@ export const DiagramCanvas: React.FC = () => {
                     if (edge.diagramId && edge.diagramId !== schema.active_diagram_id) {
                       setActiveDiagram(edge.diagramId);
                     }
+                  }}
+                  onDoubleClick={() => {
+                    if (justDraggedLabelRef.current) return;
+                    if (edge.diagramId && edge.diagramId !== schema.active_diagram_id) {
+                      setActiveDiagram(edge.diagramId);
+                    }
                     setEditingEdge(edge);
                   }}
+                  onLabelMouseDown={handleStartLabelDrag}
+                  overrideLabelX={labelDragState?.edge.routeKey === edge.routeKey ? labelDragState.currentLabelX : undefined}
+                  overrideLabelY={labelDragState?.edge.routeKey === edge.routeKey ? labelDragState.currentLabelY : undefined}
                 />
               );
             })}
@@ -1254,6 +1534,23 @@ export const DiagramCanvas: React.FC = () => {
               onHandleMouseDown={(e, handleType, segmentIndex) => handleRouteHandleDown(e, routeEditEdge, handleType, segmentIndex)}
             />
           )}
+
+          {/* Marquee Area Selection Zone (Ctrl+Q Rectangle Select) */}
+          {marqueeState && Math.hypot(marqueeState.currentX - marqueeState.startX, marqueeState.currentY - marqueeState.startY) > 2 && (
+            <g className="pointer-events-none">
+              <rect
+                x={Math.min(marqueeState.startX, marqueeState.currentX)}
+                y={Math.min(marqueeState.startY, marqueeState.currentY)}
+                width={Math.abs(marqueeState.currentX - marqueeState.startX)}
+                height={Math.abs(marqueeState.currentY - marqueeState.startY)}
+                fill={isDark ? 'rgba(56, 189, 248, 0.16)' : 'rgba(37, 99, 235, 0.12)'}
+                stroke={isDark ? '#38BDF8' : '#2563EB'}
+                strokeWidth={1.5}
+                strokeDasharray="4 2"
+                rx={2}
+              />
+            </g>
+          )}
         </svg>
 
         {/* Manual route editing bar */}
@@ -1347,9 +1644,27 @@ export const DiagramCanvas: React.FC = () => {
         isOpen={Boolean(editingEdge)}
         onClose={() => setEditingEdge(null)}
         edge={editingEdge}
+        fromNode={fromNode}
+        toNode={toNode}
         fromNodeTitle={fromNode?.title || t('canvas.sourceNodeFallback')}
         toNodeTitle={toNode?.title || t('canvas.targetNodeFallback')}
         onSave={handleSaveEdge}
+        onDelete={() => {
+          if (editingEdge) {
+            removeEdge(editingEdge.fromInstanceId, editingEdge.toInstanceId);
+            addToast('info', t('canvas.deleteEdgeSuccess') || 'Đã xóa đường nối');
+            setEditingEdge(null);
+          }
+        }}
+        onResetLabelPosition={() => {
+          if (editingEdge) {
+            updateEdgeConfig(editingEdge.fromInstanceId, editingEdge.toInstanceId, {
+              label_x: undefined,
+              label_y: undefined,
+            });
+            addToast('info', 'Đã đặt lại vị trí nhãn về mặc định');
+          }
+        }}
         onEditRoute={() => {
           if (editingEdge) setRouteEditKey(editingEdge.routeKey);
         }}

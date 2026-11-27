@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import {
   MousePointer,
   Hand,
+  BoxSelect,
   CheckSquare,
   XSquare,
   MoveHorizontal,
@@ -198,6 +199,27 @@ export const CanvasSubToolbar: React.FC<CanvasSubToolbarProps> = ({
         </div>
 
         <div className="w-px h-4 bg-gray-200 dark:bg-slate-800 mx-0.5" />
+
+        {/* Box Selection Tool (Right next to Select All) */}
+        <button
+          onClick={() => {
+            if (interactionMode === 'boxSelect') {
+              setInteractionMode('select');
+            } else {
+              setInteractionMode('boxSelect');
+              addToast('info', `${t('canvas.boxSelect')}: Kéo chuột tạo vùng chữ nhật để chọn nhiều node`);
+            }
+          }}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors font-medium text-xs ${
+            interactionMode === 'boxSelect'
+              ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700 shadow-xs'
+              : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800'
+          }`}
+          title={t('canvas.boxSelect')}
+        >
+          <BoxSelect size={13} className={interactionMode === 'boxSelect' ? 'text-blue-600 dark:text-blue-400' : ''} />
+          <span>{t('canvas.boxSelect')}</span>
+        </button>
 
         {/* Multi-selection info */}
         {selectedCount > 0 ? (

@@ -37,14 +37,14 @@ export const NodeCard: React.FC<NodeCardProps> = ({
 
   return (
     <div
-      className={`group relative bg-white rounded-lg p-2.5 transition-all shadow-sm ${
+      className={`group relative bg-white dark:bg-slate-800 rounded-lg p-2.5 transition-all shadow-sm ${
         isStorage
-          ? 'border-2 border-sky-300 bg-sky-50/20 hover:border-sky-400'
+          ? 'border-2 border-sky-300 dark:border-sky-500/60 bg-sky-50/20 dark:bg-sky-950/20 hover:border-sky-400 dark:hover:border-sky-400'
           : isMediator
-          ? 'border-2 border-dashed border-violet-300 bg-violet-50/20 hover:border-violet-400'
+          ? 'border-2 border-dashed border-violet-300 dark:border-violet-500/60 bg-violet-50/20 dark:bg-violet-950/20 hover:border-violet-400 dark:hover:border-violet-400'
           : isUnused
-          ? 'border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/20'
-          : 'border border-gray-200 hover:border-gray-300 hover:shadow'
+          ? 'border-2 border-dashed border-amber-300 dark:border-amber-500/60 hover:border-amber-400 dark:hover:border-amber-400 bg-amber-50/20 dark:bg-amber-950/20'
+          : 'border border-gray-200 dark:border-slate-700/80 hover:border-gray-300 dark:hover:border-slate-600 hover:shadow'
       }`}
     >
       <div className="flex items-start justify-between gap-1.5 mb-1.5">
@@ -70,7 +70,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
 
           {/* Node Title */}
           <span
-            className="text-xs font-medium text-gray-800 dark:text-slate-200 line-clamp-2 break-words leading-tight"
+            className="text-xs font-semibold text-gray-800 dark:text-slate-100 line-clamp-2 break-words leading-tight"
             title={template.title}
             style={{
               display: '-webkit-box',
@@ -89,14 +89,14 @@ export const NodeCard: React.FC<NodeCardProps> = ({
           <Badge
             count={usageCount}
             color={kindMeta ? kindMeta.color : isUnused ? '#F59E0B' : roleColor}
-            className={isUnused ? 'bg-amber-100 text-amber-800 font-bold' : ''}
+            className={isUnused ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold' : ''}
           />
 
           {/* Dropdown Menu Trigger */}
           <div className="relative">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <MoreVertical size={13} />
             </button>
@@ -104,13 +104,13 @@ export const NodeCard: React.FC<NodeCardProps> = ({
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-30 text-xs">
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-100 dark:border-slate-700 py-1 z-30 text-xs">
                   <button
                     onClick={() => {
                       setMenuOpen(false);
                       onEdit();
                     }}
-                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     <Edit2 size={12} />
                     {t('palette.editNode')}
@@ -121,7 +121,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
                         setMenuOpen(false);
                         onDuplicate();
                       }}
-                      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-violet-600 hover:bg-violet-50"
+                      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-slate-700"
                     >
                       <Copy size={12} />
                       {t('palette.duplicateIndependent')}
@@ -132,7 +132,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({
                       setMenuOpen(false);
                       onDelete();
                     }}
-                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-red-600 hover:bg-red-50"
+                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700"
                   >
                     <Trash2 size={12} />
                     {t('common.delete')}
@@ -157,8 +157,8 @@ export const NodeCard: React.FC<NodeCardProps> = ({
 
       {/* Quick Add / Duplicate action */}
       {(onAddToActiveFrame || onDuplicate) && (
-        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
-          <span className="text-[10px] text-gray-400">
+        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
+          <span className="text-[10px] text-gray-400 dark:text-slate-400">
             {isUnused
               ? activeFrameTitle
                 ? t('palette.addToPhase', { phase: activeFrameTitle })

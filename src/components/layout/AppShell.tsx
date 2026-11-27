@@ -4,6 +4,7 @@ import { TabBar } from './TabBar';
 import { Sidebar } from './Sidebar';
 import { RolePalette } from '../palette/RolePalette';
 import { FrameList } from '../builder/FrameList';
+import { ConnectionPanel } from '../connections/ConnectionPanel';
 import { DiagramCanvas } from '../canvas/DiagramCanvas';
 import { useUIStore } from '../../store/useUIStore';
 
@@ -25,6 +26,7 @@ export const AppShell: React.FC = () => {
           <Sidebar>
             {activePanel === 'palette' && <RolePalette />}
             {activePanel === 'builder' && <FrameList />}
+            {activePanel === 'connections' && <ConnectionPanel />}
           </Sidebar>
         </div>
 

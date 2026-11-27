@@ -7,6 +7,10 @@ interface EdgeRendererProps {
   isDark?: boolean;
   enableDarkGlow?: boolean;
   onClick?: () => void;
+  onDoubleClick?: () => void;
+  onLabelMouseDown?: (e: React.MouseEvent, edge: LayoutEdge) => void;
+  overrideLabelX?: number;
+  overrideLabelY?: number;
 }
 
 export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
@@ -15,6 +19,10 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
   isDark = false,
   enableDarkGlow = true,
   onClick,
+  onDoubleClick,
+  onLabelMouseDown,
+  overrideLabelX,
+  overrideLabelY,
 }) => {
   const defaultStrokeColor = edge.isMacro
     ? isDark
@@ -42,6 +50,9 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
 
   const glowFilter = isDark && enableDarkGlow ? `drop-shadow(0 0 3px ${strokeColor}99)` : undefined;
 
+  const currentLabelX = overrideLabelX !== undefined ? overrideLabelX : edge.labelX;
+  const currentLabelY = overrideLabelY !== undefined ? overrideLabelY : edge.labelY;
+
   return (
     <g
       className="select-none cursor-pointer group"
@@ -50,7 +61,12 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
         e.stopPropagation();
         if (onClick) onClick();
       }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (onDoubleClick) onDoubleClick();
+      }}
     >
+      <title>Nhấp đúp để chỉnh sửa đường nối</title>
       {/* Invisible wider stroke for easy click interaction */}
       <path
         d={edge.pathD}
@@ -85,9 +101,26 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
         className="group-hover:stroke-blue-400 transition-colors"
       />
 
-      {/* Edge message label pill */}
+      {/* Edge message label pill - Draggable / Double-click to Edit */}
       {edge.label && (
-        <g transform={`translate(${edge.labelX}, ${edge.labelY})`}>
+        <g
+          transform={`translate(${currentLabelX}, ${currentLabelY})`}
+          className="cursor-grab active:cursor-grabbing group/label"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            if (onLabelMouseDown) {
+              onLabelMouseDown(e, edge);
+            }
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onClick) onClick();
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (onDoubleClick) onDoubleClick();
+          }}
+        >
           <rect
             x={-edge.label.length * 3.5 - 8}
             y={-10}
@@ -96,9 +129,10 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
             rx={10}
             fill={isDark ? '#1E293B' : '#FFFFFF'}
             stroke={strokeColor}
-            strokeWidth={1.25}
+            strokeWidth={edge.labelCustom ? 2 : 1.25}
+            strokeDasharray={edge.labelCustom ? '3 2' : undefined}
             filter={isDark ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))'}
-            className="group-hover:border-blue-400 transition-colors"
+            className="group-hover/label:stroke-blue-500 transition-colors"
           />
           <text
             x={0}
@@ -107,10 +141,11 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
             fontSize={10}
             fontWeight={600}
             fill={isDark ? '#F1F5F9' : '#334155'}
-            className="font-sans"
+            className="font-sans pointer-events-none"
           >
             {edge.label}
           </text>
+          <title>Kéo để di chuyển vị trí / Nhấp đúp để chỉnh sửa</title>
         </g>
       )}
     </g>

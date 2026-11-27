@@ -218,7 +218,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       )}
 
       {/* Content Layer (Heading on Top, Note Below) */}
-      <foreignObject x={8} y={4} width={node.width - 16} height={node.height - 8} style={{ overflow: 'visible' }}>
+      <foreignObject x={8} y={4} width={node.width - 16} height={node.height - 8} style={{ overflow: 'hidden' }}>
         <div className="w-full h-full flex flex-col justify-between text-left pointer-events-none select-none">
           {/* Top Line: Heading */}
           <div className="flex items-start justify-between gap-1 w-full shrink-0">
